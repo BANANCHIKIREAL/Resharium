@@ -170,7 +170,7 @@ export default function App() {
 
   async function addSolution(input: Omit<SolutionLink, 'id' | 'created_at'>) {
     if (!safeHttpUrl(input.url)) return 'Нужна корректная ссылка http:// или https://'
-    if (!input.task) return 'Укажите номер задания'
+    if (!input.task) return 'Не удалось определить выбранный учебник'
     if (client && user) {
       const { error } = await client.from('solution_links').insert({ ...input, created_by: user.id })
       if (error) return `Supabase: ${error.message}`

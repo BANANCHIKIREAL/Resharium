@@ -218,7 +218,6 @@ export function AddSolutionModal({ books, initialBook, onClose, onSubmit, requir
   requireAuth: boolean
 }) {
   const [bookKey, setBookKey] = useState(initialBook?.id || books[0]?.id || '')
-  const [task, setTask] = useState('')
   const selectedBook = books.find((book) => book.id === bookKey) || books[0]
   const providerOptions = selectedBook ? providerOptionsFor(selectedBook) : ['Другое']
   const [provider, setProvider] = useState(() => providerOptions[0])
@@ -232,7 +231,7 @@ export function AddSolutionModal({ books, initialBook, onClose, onSubmit, requir
   async function submit(event: FormEvent) {
     event.preventDefault()
     setSaving(true); setError('')
-    const result = await onSubmit({ book_key: bookKey, task: task.trim(), provider, url: url.trim(), note: note.trim() })
+    const result = await onSubmit({ book_key: bookKey, task: selectedBook?.title || 'Ссылка на решение', provider, url: url.trim(), note: note.trim() })
     setSaving(false)
     if (result) setError(result); else onClose()
   }
@@ -241,7 +240,6 @@ export function AddSolutionModal({ books, initialBook, onClose, onSubmit, requir
       <form className="modal-form" onSubmit={submit}>
         {requireAuth && <div className="warning"><Icon>save</Icon>Вы работаете без аккаунта — ссылка останется только на этом устройстве. После входа ссылки можно публиковать для всех.</div>}
         <label><span>Учебник</span><select value={bookKey} onChange={(event) => setBookKey(event.target.value)}>{books.map((book) => <option key={book.id} value={book.id}>{book.title} · {book.grade} класс · {book.author}</option>)}</select></label>
-        <label><span>Номер задания</span><input required value={task} onChange={(event) => setTask(event.target.value)} placeholder="Например, № 247" /></label>
         <div className="source-field">
           <span>Источник</span>
           <div className="source-picker" role="radiogroup" aria-label="Источник решения">
