@@ -1,9 +1,15 @@
-const { app, BrowserWindow, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
+const { autoUpdater } = require('electron-updater')
 const path = require('path')
 
 const PROTOCOL = 'resharium'
 let mainWindow
 let pendingAuthUrl = null
+let updatePromptOpen = false
+let updateState = {
+  status: app.isPackaged ? 'idle' : 'unsupported',
+  currentVersion: app.getVersion(),
+}
 
 app.setName('Решариум')
 
@@ -26,6 +32,64 @@ function deliverAuthUrl(url) {
     mainWindow.focus()
     mainWindow.webContents.send('auth-callback', url)
   }
+}
+
+function publishUpdateState(next) {
+  updateState = { ...updateState, ...next, currentVersion: app.getVersion() }
+  if (mainWindow && !mainWindow.isDestroyed()) {
+    mainWindow.webContents.send('updater-state', updateState)
+  }
+}
+
+function checkForUpdates() {
+  if (!app.isPackaged) {
+    publishUpdateState({ status: 'unsupported', message: 'Проверка обновлений доступна в установленном приложении' })
+    return Promise.resolve(updateState)
+  }
+  if (updateState.status === 'checking' || updateState.status === 'downloading') return Promise.resolve(updateState)
+  return autoUpdater.checkForUpdates().then(() => updateState).catch((error) => {
+    publishUpdateState({ status: 'error', message: error?.message || 'Не удалось проверить обновления' })
+    return updateState
+  })
+}
+
+function configureUpdater() {
+  if (!app.isPackaged) return
+
+  autoUpdater.autoDownload = true
+  autoUpdater.autoInstallOnAppQuit = true
+  autoUpdater.allowPrerelease = false
+
+  autoUpdater.on('checking-for-update', () => publishUpdateState({ status: 'checking', message: 'Проверяем обновления…' }))
+  autoUpdater.on('update-available', (info) => publishUpdateState({ status: 'downloading', availableVersion: info.version, progress: 0, message: `Загружается версия ${info.version}` }))
+  autoUpdater.on('update-not-available', () => publishUpdateState({ status: 'not-available', availableVersion: undefined, progress: undefined, message: 'Установлена актуальная версия' }))
+  autoUpdater.on('download-progress', (progress) => publishUpdateState({ status: 'downloading', progress: Math.round(progress.percent), message: `Загрузка обновления: ${Math.round(progress.percent)}%` }))
+  autoUpdater.on('error', (error) => {
+    console.error('Updater error:', error)
+    publishUpdateState({ status: 'error', progress: undefined, message: 'Не удалось проверить или загрузить обновление' })
+  })
+  autoUpdater.on('update-downloaded', async (info) => {
+    publishUpdateState({ status: 'downloaded', availableVersion: info.version, progress: 100, message: `Версия ${info.version} готова к установке` })
+    if (updatePromptOpen) return
+    updatePromptOpen = true
+    const result = await dialog.showMessageBox(mainWindow, {
+      type: 'info',
+      title: 'Обновление Решариума',
+      message: `Версия ${info.version} загружена`,
+      detail: 'Перезапустить приложение сейчас и установить обновление?',
+      buttons: ['Перезапустить', 'Позже'],
+      defaultId: 0,
+      cancelId: 1,
+      noLink: true,
+    })
+    updatePromptOpen = false
+    if (result.response === 0) autoUpdater.quitAndInstall(false, true)
+  })
+
+  const firstCheck = setTimeout(() => void checkForUpdates(), 5000)
+  firstCheck.unref()
+  const periodicCheck = setInterval(() => void checkForUpdates(), 4 * 60 * 60 * 1000)
+  periodicCheck.unref()
 }
 
 app.on('second-instance', (_event, argv) => {
@@ -93,9 +157,17 @@ ipcMain.handle('open-external', (_event, url) => {
 })
 ipcMain.handle('get-pending-auth-url', () => pendingAuthUrl)
 ipcMain.handle('clear-pending-auth-url', () => { pendingAuthUrl = null })
+ipcMain.handle('updater-get-state', () => updateState)
+ipcMain.handle('updater-check', () => checkForUpdates())
+ipcMain.handle('updater-install', () => {
+  if (updateState.status !== 'downloaded') return false
+  autoUpdater.quitAndInstall(false, true)
+  return true
+})
 
 app.whenReady().then(() => {
   createWindow()
+  configureUpdater()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })

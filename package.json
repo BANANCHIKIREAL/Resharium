@@ -1,6 +1,6 @@
 {
   "name": "resharium",
-  "version": "1.0.9",
+  "version": "1.1.0",
   "private": true,
   "type": "module",
   "description": "Современный каталог ссылок на решения школьных заданий",
@@ -23,6 +23,7 @@
   "dependencies": {
     "@material-symbols/font-400": "0.47.0",
     "@supabase/supabase-js": "2.114.0",
+    "electron-updater": "^6.8.9",
     "react": "19.2.8",
     "react-dom": "19.2.8"
   },
@@ -47,6 +48,14 @@
     "directories": {
       "output": "release"
     },
+    "publish": [
+      {
+        "provider": "github",
+        "owner": "BANANCHIKIREAL",
+        "repo": "Resharium",
+        "releaseType": "release"
+      }
+    ],
     "files": [
       "dist/**/*",
       "electron/**/*",

@@ -42,6 +42,14 @@ export interface BookCollection {
 
 export type View = 'home' | 'catalog' | 'favorites' | 'collections' | 'profile' | 'moderation'
 
+export interface UpdateState {
+  status: 'idle' | 'checking' | 'downloading' | 'downloaded' | 'not-available' | 'error' | 'unsupported'
+  currentVersion: string
+  availableVersion?: string
+  progress?: number
+  message?: string
+}
+
 declare global {
   interface Window {
     desktop?: {
@@ -49,6 +57,10 @@ declare global {
       getPendingAuthUrl: () => Promise<string | null>
       clearPendingAuthUrl: () => Promise<void>
       onAuthCallback: (callback: (url: string) => void) => () => void
+      getUpdateState: () => Promise<UpdateState>
+      checkForUpdates: () => Promise<UpdateState>
+      installUpdate: () => Promise<boolean>
+      onUpdateState: (callback: (state: UpdateState) => void) => () => void
     }
   }
 }

@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
-import type { Book, BookCollection, SolutionLink, View } from './types'
+import type { Book, BookCollection, SolutionLink, UpdateState, View } from './types'
 import { providerIconFor, providerOptionsFor, providerSearchesFor, subjects } from './data'
 import { profileAvatarUrl } from './avatar'
 
@@ -112,6 +112,51 @@ export function SubjectRow({ active, onSelect }: { active: string; onSelect: (su
       ))}
     </div>
   )
+}
+
+export function GradePicker({ grade, onSelect }: { grade: number; onSelect: (grade: number) => void }) {
+  const [open, setOpen] = useState(false)
+  const [dropUp, setDropUp] = useState(false)
+  const pickerRef = useRef<HTMLDivElement | null>(null)
+
+  useEffect(() => {
+    if (!open) return
+    const closeOutside = (event: PointerEvent) => {
+      if (!pickerRef.current?.contains(event.target as Node)) setOpen(false)
+    }
+    const closeOnEscape = (event: KeyboardEvent) => {
+      if (event.key === 'Escape') setOpen(false)
+    }
+    document.addEventListener('pointerdown', closeOutside)
+    document.addEventListener('keydown', closeOnEscape)
+    return () => {
+      document.removeEventListener('pointerdown', closeOutside)
+      document.removeEventListener('keydown', closeOnEscape)
+    }
+  }, [open])
+
+  const choose = (value: number) => {
+    onSelect(value)
+    setOpen(false)
+  }
+
+  const toggle = () => {
+    if (!open) {
+      const bounds = pickerRef.current?.getBoundingClientRect()
+      setDropUp(Boolean(bounds && window.innerHeight - bounds.bottom < 230))
+    }
+    setOpen((value) => !value)
+  }
+
+  return <div className={`grade-picker${open ? ' open' : ''}${dropUp ? ' drop-up' : ''}`} ref={pickerRef}>
+    <button type="button" className="grade-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={toggle}>
+      <span>Класс</span><b>{grade || 'Все'}</b><Icon>expand_more</Icon>
+    </button>
+    {open && <div className="grade-menu" role="listbox" aria-label="Выбор класса">
+      <button type="button" role="option" aria-selected={!grade} className={!grade ? 'active' : ''} onClick={() => choose(0)}>Все классы</button>
+      <div className="grade-grid">{Array.from({ length: 11 }, (_, index) => index + 1).map((value) => <button type="button" role="option" aria-selected={grade === value} className={grade === value ? 'active' : ''} key={value} onClick={() => choose(value)}>{value}</button>)}</div>
+    </div>}
+  </div>
 }
 
 export function BookCard({ book, favorite, sourceCount, onFavorite, onOpen }: {
@@ -342,7 +387,30 @@ export function ModerationPage({ solutions, books, onModerate, onOpenLink }: {
 
 export function ProfilePage({ user, favorites, solutions, submitted, onAuth }: { user: User | null; favorites: number; solutions: number; submitted: SolutionLink[]; onAuth: () => void }) {
   const name = user?.user_metadata?.full_name || 'Гостевой профиль'
-  return <section className="profile-page"><div className="profile-banner"><UserAvatar user={user} className="profile-avatar" /><div><span className="eyebrow">Мой профиль</span><h1>{name}</h1><p>{user?.email || 'Работаете локально на этом компьютере'}</p></div><button className="soft-btn" onClick={onAuth}><Icon>{user ? 'manage_accounts' : 'login'}</Icon>{user ? 'Управление' : 'Войти'}</button></div><div className="stat-grid"><div><Icon>bookmark</Icon><b>{favorites}</b><span>В избранном</span></div><div><Icon>add_link</Icon><b>{solutions}</b><span>Отправлено ссылок</span></div><div><Icon>cloud_sync</Icon><b>{user ? 'On' : 'Off'}</b><span>Синхронизация</span></div></div>{user && submitted.length > 0 && <div className="submitted-links"><div className="history-heading"><h2>Мои ссылки</h2><span>{submitted.length}</span></div>{submitted.map((item) => <article key={item.id}><span className={`status-badge ${item.status || 'pending'}`}>{item.status === 'approved' ? 'Одобрено' : item.status === 'rejected' ? 'Отклонено' : 'На проверке'}</span><div><b>{item.task} · {item.provider}</b>{item.status === 'rejected' && item.rejection_reason && <small>Причина: {item.rejection_reason}</small>}</div></article>)}</div>}<div className="profile-tip"><span><Icon>lightbulb</Icon></span><div><h3>Учитесь осознанно</h3><p>Сначала попробуйте решить задание самостоятельно, а затем используйте источник для проверки хода решения.</p></div></div></section>
+  return <section className="profile-page"><div className="profile-banner"><UserAvatar user={user} className="profile-avatar" /><div><span className="eyebrow">Мой профиль</span><h1>{name}</h1><p>{user?.email || 'Работаете локально на этом компьютере'}</p></div><button className="soft-btn" onClick={onAuth}><Icon>{user ? 'manage_accounts' : 'login'}</Icon>{user ? 'Управление' : 'Войти'}</button></div><div className="stat-grid"><div><Icon>bookmark</Icon><b>{favorites}</b><span>В избранном</span></div><div><Icon>add_link</Icon><b>{solutions}</b><span>Отправлено ссылок</span></div><div><Icon>cloud_sync</Icon><b>{user ? 'On' : 'Off'}</b><span>Синхронизация</span></div></div>{user && submitted.length > 0 && <div className="submitted-links"><div className="history-heading"><h2>Мои ссылки</h2><span>{submitted.length}</span></div>{submitted.map((item) => <article key={item.id}><span className={`status-badge ${item.status || 'pending'}`}>{item.status === 'approved' ? 'Одобрено' : item.status === 'rejected' ? 'Отклонено' : 'На проверке'}</span><div><b>{item.task} · {item.provider}</b>{item.status === 'rejected' && item.rejection_reason && <small>Причина: {item.rejection_reason}</small>}</div></article>)}</div>}</section>
+}
+
+export function UpdateControl() {
+  const [state, setState] = useState<UpdateState | null>(null)
+
+  useEffect(() => {
+    const desktop = window.desktop
+    if (!desktop) return
+    void desktop.getUpdateState().then(setState)
+    return desktop.onUpdateState(setState)
+  }, [])
+
+  if (!window.desktop || !state) return null
+  const busy = state.status === 'checking' || state.status === 'downloading'
+  const label = state.status === 'checking' ? 'Проверка…'
+    : state.status === 'downloading' ? `Загрузка ${state.progress || 0}%`
+      : state.status === 'downloaded' ? `Установить ${state.availableVersion}`
+        : state.status === 'not-available' ? `Версия ${state.currentVersion} актуальна`
+          : state.status === 'error' ? 'Повторить проверку'
+            : `Версия ${state.currentVersion}`
+  const icon = state.status === 'downloaded' ? 'restart_alt' : state.status === 'not-available' ? 'check_circle' : 'system_update'
+
+  return <button className={`update-control ${state.status}`} type="button" disabled={busy} title={state.message || 'Проверить обновления'} onClick={() => state.status === 'downloaded' ? void window.desktop?.installUpdate() : void window.desktop?.checkForUpdates()}><Icon>{icon}</Icon>{label}</button>
 }
 
 export function Toast({ message, onDone }: { message: string; onDone: () => void }) {

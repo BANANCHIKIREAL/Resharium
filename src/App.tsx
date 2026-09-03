@@ -3,7 +3,7 @@ import type { Session, SupabaseClient, User } from '@supabase/supabase-js'
 import { books, demoSolutions, providerSearchesFor } from './data'
 import type { Book, BookCollection, SolutionLink, View } from './types'
 import { createSupabase, getStoredSettings } from './lib/supabase'
-import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, Hero, Icon, ModerationPage, ProfilePage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar } from './components'
+import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, ProfilePage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
 
 const FAVORITES_KEY = 'resharium.favorites'
 const LOCAL_SOLUTIONS_KEY = 'resharium.solutions'
@@ -255,12 +255,12 @@ export default function App() {
         {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={setSelectedBook} /> : <>
           {view === 'home' && !query && !subject && !grade && <Hero onCatalog={() => setView('catalog')} />}
           <section className="filter-section">
-            <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><label className="grade-select"><span>Класс</span><select value={grade} onChange={(event) => setGrade(Number(event.target.value))}><option value={0}>Все</option>{[1, 2, 3, 4, 5, 6, 7, 8, 9, 10, 11].map((item) => <option key={item} value={item}>{item}</option>)}</select><Icon>expand_more</Icon></label></div>
+            <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><GradePicker grade={grade} onSelect={setGrade} /></div>
             <SubjectRow active={subject} onSelect={setSubject} />
           </section>
           <BookGrid books={visibleBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={toggleFavorite} onOpen={setSelectedBook} title={pageTitle} />
         </>}
-        <footer className="app-footer"><span>Решариум · каталог образовательных ссылок</span><span>Сначала подумай — потом проверь <Icon>auto_awesome</Icon></span></footer>
+        <footer className="app-footer"><span>Решариум · каталог образовательных ссылок</span><UpdateControl /></footer>
       </div>
     </main>
     {selectedBook && <BookDrawer book={selectedBook} solutions={publicSolutions.filter((item) => item.book_key === selectedBook.id)} onClose={() => setSelectedBook(null)} onAdd={() => setShowAdd(true)} onCollect={() => { setCollectionBook(selectedBook); setShowCollection(true) }} onOpenLink={openLink} />}
