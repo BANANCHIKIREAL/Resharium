@@ -199,6 +199,20 @@ export default function App() {
     return null
   }
 
+  async function deleteSolution(id: string) {
+    if (!window.confirm('Удалить эту ссылку? Восстановить её будет нельзя.')) return
+    if (client && user && !id.startsWith('demo-')) {
+      const { data, error } = await client.from('solution_links').delete().eq('id', id).select('id')
+      if (error) return setToast(`Не удалось удалить ссылку: ${error.message}`)
+      if (!data?.length) return setToast('Ссылка не удалена: недостаточно прав')
+    } else {
+      const local = readJson<SolutionLink[]>(LOCAL_SOLUTIONS_KEY, []).filter((item) => item.id !== id)
+      localStorage.setItem(LOCAL_SOLUTIONS_KEY, JSON.stringify(local))
+    }
+    setSolutions((current) => current.filter((item) => item.id !== id))
+    setToast('Ссылка удалена')
+  }
+
   async function googleLogin() {
     if (!client) return 'Сервис аккаунтов временно недоступен'
     if (!googleEnabled) return 'Google-вход пока недоступен'
@@ -252,7 +266,7 @@ export default function App() {
     <main className="main-area">
       <Topbar query={query} setQuery={setQuery} onAuth={() => setShowAuth(true)} />
       <div className="page" ref={searchRef as never}>
-        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={setSelectedBook} /> : <>
+        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={setSelectedBook} /> : <>
           {view === 'home' && !query && !subject && !grade && <Hero onCatalog={() => setView('catalog')} />}
           <section className="filter-section">
             <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><GradePicker grade={grade} onSelect={setGrade} /></div>

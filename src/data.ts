@@ -218,3 +218,14 @@ export function providerOptionsFor(book: Book) {
 export function providerIconFor(provider: string) {
   return providerIcons[provider as keyof typeof providerIcons]
 }
+
+export function solutionIconFor(provider: string, url: string) {
+  const knownIcon = providerIconFor(provider)
+  if (knownIcon) return knownIcon
+  try {
+    const parsed = new URL(url)
+    return parsed.protocol === 'https:' || parsed.protocol === 'http:' ? new URL('/favicon.ico', parsed.origin).href : undefined
+  } catch {
+    return undefined
+  }
+}

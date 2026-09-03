@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { books, providerIconFor, providerOptionsFor, providerSearchesFor } from './data'
+import { books, providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor } from './data'
 
 function section(grade: number, subject: string) {
   const book = books.find((item) => item.grade === grade && item.subject === subject)
@@ -29,5 +29,9 @@ describe('verified provider availability', () => {
     for (const item of providerSearchesFor(section(7, 'Химия'))) {
       expect(providerIconFor(item.provider)).toMatch(/assets\/providers\/.+\.png$/)
     }
+  })
+
+  it('uses the source favicon for a custom solution', () => {
+    expect(solutionIconFor('Другое', 'https://example.com/path/to/answer')).toBe('https://example.com/favicon.ico')
   })
 })

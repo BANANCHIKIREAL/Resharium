@@ -1,11 +1,20 @@
 import { useEffect, useRef, useState, type FormEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
 import type { Book, BookCollection, SolutionLink, UpdateState, View } from './types'
-import { providerIconFor, providerOptionsFor, providerSearchesFor, subjects } from './data'
+import { providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor, subjects } from './data'
 import { profileAvatarUrl } from './avatar'
 
 export function Icon({ children, filled = false }: { children: string; filled?: boolean }) {
   return <span className={`material-symbols-rounded${filled ? ' filled' : ''}`} aria-hidden="true">{children}</span>
+}
+
+function ProviderLogo({ provider, url }: { provider: string; url: string }) {
+  const [failed, setFailed] = useState(false)
+  const icon = solutionIconFor(provider, url)
+  useEffect(() => setFailed(false), [icon])
+  return <span className={`provider-logo${icon && !failed ? ' provider-brand' : ''}`}>
+    {icon && !failed ? <img src={icon} alt="" onError={() => setFailed(true)} /> : <Icon>link</Icon>}
+  </span>
 }
 
 function UserAvatar({ user, className = '' }: { user: User | null; className?: string }) {
@@ -234,7 +243,7 @@ export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenL
           <div className="list-head"><b>{taskSearch.trim() ? `Источники для «${taskSearch.trim()}»` : 'Все доступные источники'}</b><span>{filtered.length + availableProviders.length}</span></div>
           {filtered.map((item) => (
             <button className="solution-item" key={item.id} onClick={() => onOpenLink(item.url)}>
-              <span className="provider-logo"><Icon>auto_stories</Icon></span>
+              <ProviderLogo provider={item.provider} url={item.url} />
               <span><b>{item.task}</b><small>{item.provider} · {item.note || 'Внешний источник'}</small></span>
               <Icon>open_in_new</Icon>
             </button>
@@ -336,10 +345,11 @@ export function AuthModal({ connected, googleEnabled, user, onGoogle, onEmail, o
   </Modal>
 }
 
-export function ModerationPage({ solutions, books, onModerate, onOpenLink }: {
+export function ModerationPage({ solutions, books, onModerate, onDelete, onOpenLink }: {
   solutions: SolutionLink[]
   books: Book[]
   onModerate: (id: string, status: 'approved' | 'rejected', reason: string) => Promise<string | null>
+  onDelete: (id: string) => void
   onOpenLink: (url: string) => void
 }) {
   const [rejecting, setRejecting] = useState<string | null>(null)
@@ -370,6 +380,7 @@ export function ModerationPage({ solutions, books, onModerate, onOpenLink }: {
     </div>
     <div className="moderation-actions">
       <button className="ghost" onClick={() => onOpenLink(item.url)}><Icon>open_in_new</Icon>Проверить ссылку</button>
+      <button className="delete-link-btn" title="Удалить ссылку" aria-label={`Удалить ссылку ${item.task}`} disabled={busy === item.id} onClick={() => onDelete(item.id)}><Icon>delete</Icon>Удалить</button>
       {!history && <>
         <button className="approve-btn" disabled={busy === item.id} onClick={() => void moderate(item.id, 'approved')}><Icon>check</Icon>Одобрить</button>
         <button className="reject-btn" disabled={busy === item.id} onClick={() => { setRejecting(item.id); setReason(''); setError('') }}><Icon>close</Icon>Отклонить</button>
@@ -384,9 +395,9 @@ export function ModerationPage({ solutions, books, onModerate, onOpenLink }: {
   </section>
 }
 
-export function ProfilePage({ user, favorites, solutions, submitted, onAuth }: { user: User | null; favorites: number; solutions: number; submitted: SolutionLink[]; onAuth: () => void }) {
+export function ProfilePage({ user, favorites, solutions, submitted, onAuth, onDelete }: { user: User | null; favorites: number; solutions: number; submitted: SolutionLink[]; onAuth: () => void; onDelete: (id: string) => void }) {
   const name = user?.user_metadata?.full_name || 'Гостевой профиль'
-  return <section className="profile-page"><div className="profile-banner"><UserAvatar user={user} className="profile-avatar" /><div><span className="eyebrow">Мой профиль</span><h1>{name}</h1><p>{user?.email || 'Работаете локально на этом компьютере'}</p></div><button className="soft-btn" onClick={onAuth}><Icon>{user ? 'manage_accounts' : 'login'}</Icon>{user ? 'Управление' : 'Войти'}</button></div><div className="stat-grid"><div><Icon>bookmark</Icon><b>{favorites}</b><span>В избранном</span></div><div><Icon>add_link</Icon><b>{solutions}</b><span>Отправлено ссылок</span></div><div><Icon>cloud_sync</Icon><b>{user ? 'On' : 'Off'}</b><span>Синхронизация</span></div></div>{user && submitted.length > 0 && <div className="submitted-links"><div className="history-heading"><h2>Мои ссылки</h2><span>{submitted.length}</span></div>{submitted.map((item) => <article key={item.id}><span className={`status-badge ${item.status || 'pending'}`}>{item.status === 'approved' ? 'Одобрено' : item.status === 'rejected' ? 'Отклонено' : 'На проверке'}</span><div><b>{item.task} · {item.provider}</b>{item.status === 'rejected' && item.rejection_reason && <small>Причина: {item.rejection_reason}</small>}</div></article>)}</div>}</section>
+  return <section className="profile-page"><div className="profile-banner"><UserAvatar user={user} className="profile-avatar" /><div><span className="eyebrow">Мой профиль</span><h1>{name}</h1><p>{user?.email || 'Работаете локально на этом компьютере'}</p></div><button className="soft-btn" onClick={onAuth}><Icon>{user ? 'manage_accounts' : 'login'}</Icon>{user ? 'Управление' : 'Войти'}</button></div><div className="stat-grid"><div><Icon>bookmark</Icon><b>{favorites}</b><span>В избранном</span></div><div><Icon>add_link</Icon><b>{solutions}</b><span>Отправлено ссылок</span></div><div><Icon>cloud_sync</Icon><b>{user ? 'On' : 'Off'}</b><span>Синхронизация</span></div></div>{user && submitted.length > 0 && <div className="submitted-links"><div className="history-heading"><h2>Мои ссылки</h2><span>{submitted.length}</span></div>{submitted.map((item) => <article key={item.id}><ProviderLogo provider={item.provider} url={item.url} /><span className={`status-badge ${item.status || 'pending'}`}>{item.status === 'approved' ? 'Одобрено' : item.status === 'rejected' ? 'Отклонено' : 'На проверке'}</span><div className="submitted-link-copy"><b>{item.task} · {item.provider}</b>{item.status === 'rejected' && item.rejection_reason && <small>Причина: {item.rejection_reason}</small>}</div><button className="delete-link-btn compact" title="Удалить ссылку" aria-label={`Удалить ссылку ${item.task}`} onClick={() => onDelete(item.id)}><Icon>delete</Icon></button></article>)}</div>}</section>
 }
 
 export function UpdateControl() {
