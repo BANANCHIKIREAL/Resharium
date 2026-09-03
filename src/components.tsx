@@ -38,7 +38,6 @@ export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
     { id: 'catalog' as const, icon: 'local_library', label: 'Каталог' },
     { id: 'favorites' as const, icon: 'bookmark', label: 'Избранное' },
     { id: 'collections' as const, icon: 'folder_special', label: 'Мои подборки' },
-    { id: 'profile' as const, icon: 'person', label: 'Профиль' },
   ]
   if (isAdmin) nav.push({ id: 'moderation', icon: 'fact_check', label: 'Модерация' })
   return (
