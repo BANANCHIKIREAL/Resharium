@@ -10,6 +10,8 @@ export interface Book {
   color: string
   accent: string
   coverUrl?: string
+  sourceUrl?: string
+  sourceName?: string
   popular?: boolean
 }
 
@@ -43,7 +45,7 @@ export interface BookCollection {
 export type View = 'home' | 'catalog' | 'favorites' | 'collections' | 'profile' | 'moderation'
 
 export interface UpdateState {
-  status: 'idle' | 'checking' | 'downloading' | 'downloaded' | 'not-available' | 'error' | 'unsupported'
+  status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error' | 'unsupported'
   currentVersion: string
   availableVersion?: string
   progress?: number

@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js'
-import { books, demoSolutions, providerSearchesFor } from './data'
+import { books as bundledBooks, decorateBook, demoSolutions, providerSearchesFor } from './data'
 import type { Book, BookCollection, SolutionLink, View } from './types'
 import { createSupabase, getStoredSettings } from './lib/supabase'
 import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, ProfilePage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
@@ -22,6 +22,7 @@ function safeHttpUrl(value: string) {
 }
 
 export default function App() {
+  const [books, setBooks] = useState<Book[]>(bundledBooks)
   const [view, setView] = useState<View>('home')
   const [query, setQuery] = useState('')
   const [subject, setSubject] = useState('')
@@ -102,6 +103,83 @@ export default function App() {
   }, [client, settings])
 
   useEffect(() => {
+    if (!client) return
+    let active = true
+    client.from('textbooks').select('id,title,author,grade,subject,year,cover_url,source_url,source_name,popular').eq('active', true).order('grade').order('title').then(({ data, error }) => {
+      if (!active || error || !data?.length) return
+      setBooks(data.map((row, index) => decorateBook({
+        id: row.id,
+        title: row.title,
+        author: row.author,
+        grade: row.grade,
+        subject: row.subject as Book['subject'],
+        year: row.year || undefined,
+        coverUrl: row.cover_url || undefined,
+        sourceUrl: row.source_url || undefined,
+        sourceName: row.source_name || undefined,
+        popular: row.popular,
+      }, index)))
+    })
+    return () => { active = false }
+  }, [client])
+
+  useEffect(() => {
+    if (!client || !user) return
+    let active = true
+    const syncLibrary = async () => {
+      const validIds = new Set(books.map((book) => book.id))
+      const localFavorites = readJson<string[]>(FAVORITES_KEY, []).filter((id) => validIds.has(id))
+      const localCollections = readJson<BookCollection[]>(COLLECTIONS_KEY, []).map((collection) => ({
+        ...collection,
+        bookIds: collection.bookIds.filter((id) => validIds.has(id)),
+      }))
+
+      if (localFavorites.length) {
+        await client.from('user_favorites').upsert(localFavorites.map((book_key) => ({ user_id: user.id, book_key })), { onConflict: 'user_id,book_key', ignoreDuplicates: true })
+      }
+      if (localCollections.length) {
+        const { error } = await client.from('book_collections').upsert(localCollections.map((collection) => ({ id: collection.id, user_id: user.id, name: collection.name })), { onConflict: 'id' })
+        if (!error) {
+          const items = localCollections.flatMap((collection) => collection.bookIds.map((book_key) => ({ collection_id: collection.id, book_key })))
+          if (items.length) await client.from('book_collection_items').upsert(items, { onConflict: 'collection_id,book_key', ignoreDuplicates: true })
+        }
+      }
+
+      const [favoritesResult, collectionsResult, itemsResult] = await Promise.all([
+        client.from('user_favorites').select('book_key').eq('user_id', user.id),
+        client.from('book_collections').select('id,name,created_at').eq('user_id', user.id).order('created_at'),
+        client.from('book_collection_items').select('collection_id,book_key'),
+      ])
+      if (!active) return
+      if (!favoritesResult.error && favoritesResult.data) {
+        const next = favoritesResult.data.map((item) => item.book_key)
+        setFavorites(next)
+        localStorage.setItem(FAVORITES_KEY, JSON.stringify(next))
+      }
+      if (!collectionsResult.error && collectionsResult.data && !itemsResult.error && itemsResult.data) {
+        const next = collectionsResult.data.map((collection) => ({
+          id: collection.id,
+          name: collection.name,
+          createdAt: collection.created_at,
+          bookIds: itemsResult.data.filter((item) => item.collection_id === collection.id).map((item) => item.book_key),
+        }))
+        setCollections(next)
+        localStorage.setItem(COLLECTIONS_KEY, JSON.stringify(next))
+      }
+    }
+    void syncLibrary()
+    const onFocus = () => void syncLibrary()
+    const onVisibility = () => { if (document.visibilityState === 'visible') void syncLibrary() }
+    window.addEventListener('focus', onFocus)
+    document.addEventListener('visibilitychange', onVisibility)
+    return () => {
+      active = false
+      window.removeEventListener('focus', onFocus)
+      document.removeEventListener('visibilitychange', onVisibility)
+    }
+  }, [client, user, books])
+
+  useEffect(() => {
     let active = true
     if (!client || !user) { setIsAdmin(false); return }
     client.rpc('is_admin').then(({ data, error }) => {
@@ -150,7 +228,7 @@ export default function App() {
   const sourceCounts = useMemo(() => publicSolutions.reduce<Record<string, number>>((counts, item) => {
     counts[item.book_key] = (counts[item.book_key] || 0) + 1
     return counts
-  }, Object.fromEntries(books.map((book) => [book.id, providerSearchesFor(book).length]))), [publicSolutions])
+  }, Object.fromEntries(books.map((book) => [book.id, providerSearchesFor(book).length]))), [publicSolutions, books])
 
   function toggleFavorite(id: string) {
     setFavorites((current) => {
@@ -158,6 +236,22 @@ export default function App() {
       localStorage.setItem(FAVORITES_KEY, JSON.stringify(next))
       return next
     })
+    if (client && user) {
+      const removing = favorites.includes(id)
+      const request = removing
+        ? client.from('user_favorites').delete().eq('user_id', user.id).eq('book_key', id)
+        : client.from('user_favorites').insert({ user_id: user.id, book_key: id })
+      void request.then(({ error }) => {
+        if (error) {
+          setToast(`Не удалось синхронизировать избранное: ${error.message}`)
+          setFavorites((current) => {
+            const restored = removing ? [...current, id] : current.filter((item) => item !== id)
+            localStorage.setItem(FAVORITES_KEY, JSON.stringify(restored))
+            return restored
+          })
+        }
+      })
+    }
   }
 
   function commitCollections(next: BookCollection[]) {
@@ -168,18 +262,26 @@ export default function App() {
   function createCollection(name: string, bookId?: string) {
     const collection: BookCollection = { id: crypto.randomUUID(), name, bookIds: bookId ? [bookId] : [], createdAt: new Date().toISOString() }
     commitCollections([...collections, collection])
+    if (client && user) {
+      void client.from('book_collections').insert({ id: collection.id, user_id: user.id, name }).then(async ({ error }) => {
+        if (!error && bookId) await client.from('book_collection_items').insert({ collection_id: collection.id, book_key: bookId })
+        if (error) setToast(`Подборка сохранена локально, но не синхронизирована: ${error.message}`)
+      })
+    }
     setToast(bookId ? 'Подборка создана, раздел добавлен' : 'Подборка создана')
   }
 
   function addToCollection(collectionId: string, bookId: string) {
     commitCollections(collections.map((collection) => collection.id === collectionId && !collection.bookIds.includes(bookId) ? { ...collection, bookIds: [...collection.bookIds, bookId] } : collection))
     setToast('Добавлено в подборку')
+    if (client && user) void client.from('book_collection_items').upsert({ collection_id: collectionId, book_key: bookId }, { onConflict: 'collection_id,book_key', ignoreDuplicates: true }).then(({ error }) => error && setToast(`Не удалось синхронизировать подборку: ${error.message}`))
   }
 
   function deleteCollection(collectionId: string) {
     commitCollections(collections.filter((collection) => collection.id !== collectionId))
     if (activeCollectionId === collectionId) setActiveCollectionId(null)
     setToast('Подборка удалена')
+    if (client && user) void client.from('book_collections').delete().eq('id', collectionId).eq('user_id', user.id).then(({ error }) => error && setToast(`Не удалось удалить подборку из профиля: ${error.message}`))
   }
 
   async function addSolution(input: Omit<SolutionLink, 'id' | 'created_at'>) {

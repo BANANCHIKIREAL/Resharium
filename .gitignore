@@ -1,6 +1,7 @@
 node_modules/
 dist/
 release/
+release-*/
 screenshots/
 supabase/.temp/
 
@@ -30,3 +31,4 @@ android/app/build/
 android/build/
 android/capacitor-cordova-android-plugins/build/
 .tools/
+.smoke-profile-*/

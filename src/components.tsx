@@ -3,6 +3,15 @@ import type { User } from '@supabase/supabase-js'
 import type { Book, BookCollection, SolutionLink, UpdateState, View } from './types'
 import { providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor, subjects } from './data'
 import { profileAvatarUrl } from './avatar'
+import { checkAndroidUpdate, getAndroidUpdateState, installAndroidUpdate, isNativeAndroid } from './mobile'
+
+function bookCoverStyle(book: Book) {
+  return {
+    '--book-color': book.color,
+    '--book-accent': book.accent,
+    '--book-glow': `${book.color}66`,
+  } as React.CSSProperties
+}
 
 export function Icon({ children, filled = false }: { children: string; filled?: boolean }) {
   return <span className={`material-symbols-rounded${filled ? ' filled' : ''}`} aria-hidden="true">{children}</span>
@@ -179,7 +188,7 @@ export function BookCard({ book, favorite, sourceCount, onFavorite, onOpen }: {
       <button className={`bookmark ${favorite ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); onFavorite() }}>
         <Icon filled={favorite}>bookmark</Icon>
       </button>
-      <div className="book-cover" style={{ '--book-color': book.color, '--book-accent': book.accent } as React.CSSProperties}>
+      <div className="book-cover" style={bookCoverStyle(book)}>
         {book.coverUrl ? <img src={book.coverUrl} alt="" /> : <><span className="cover-grade">{book.grade}</span><Icon>auto_stories</Icon><small>{book.grade} класс</small><b>{book.title}</b></>}
       </div>
       <div className="book-info">
@@ -222,7 +231,7 @@ export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenL
 }) {
   const [taskSearch, setTaskSearch] = useState('')
   const filtered = solutions.filter((item) => item.task.toLowerCase().includes(taskSearch.toLowerCase()))
-  const availableProviders = providerSearchesFor(book)
+  const availableProviders = providerSearchesFor(book).filter((provider) => provider.provider !== book.sourceName)
   const sourceUrl = (domain: string) => taskSearch.trim()
     ? `https://www.google.com/search?q=${encodeURIComponent(`site:${domain} ${book.title} ${book.grade} класс ${taskSearch.trim()} решение`)}`
     : `https://${domain}/`
@@ -235,12 +244,12 @@ export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenL
           <div className="drawer-actions"><button className="soft-btn" onClick={onCollect}><Icon>folder_special</Icon> В подборку</button><button className="soft-btn" onClick={onAdd}><Icon>add_link</Icon> Ссылка</button></div>
         </div>
         <div className="drawer-book">
-          <div className="book-cover large" style={{ '--book-color': book.color, '--book-accent': book.accent } as React.CSSProperties}><span className="cover-grade">{book.grade}</span><Icon>auto_stories</Icon><small>{book.grade} класс</small><b>{book.title}</b></div>
+          <div className="book-cover large" style={bookCoverStyle(book)}>{book.coverUrl ? <img src={book.coverUrl} alt={`Обложка: ${book.title}`} /> : <><span className="cover-grade">{book.grade}</span><Icon>auto_stories</Icon><small>{book.grade} класс</small><b>{book.title}</b></>}</div>
           <div><span className="grade-pill">{book.grade} класс{book.year ? ` · ${book.year}` : ''}</span><h2>{book.title}</h2><p>{book.author}</p><span className="verified"><Icon>verified</Icon> Каталог источников</span></div>
         </div>
         <label className="task-search"><Icon>search</Icon><input value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} placeholder="Введите номер задания" /></label>
         <div className="solution-list">
-          <div className="list-head"><b>{taskSearch.trim() ? `Источники для «${taskSearch.trim()}»` : 'Все доступные источники'}</b><span>{filtered.length + availableProviders.length}</span></div>
+          <div className="list-head"><b>{taskSearch.trim() ? `Источники для «${taskSearch.trim()}»` : 'Все доступные источники'}</b><span>{filtered.length + availableProviders.length + (book.sourceUrl ? 1 : 0)}</span></div>
           {filtered.map((item) => (
             <button className="solution-item" key={item.id} onClick={() => onOpenLink(item.url)}>
               <ProviderLogo provider={item.provider} url={item.url} />
@@ -248,6 +257,11 @@ export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenL
               <Icon>open_in_new</Icon>
             </button>
           ))}
+          {book.sourceUrl && <button className="solution-item provider-search" onClick={() => onOpenLink(book.sourceUrl!)}>
+            <ProviderLogo provider={book.sourceName || 'Решёба'} url={book.sourceUrl} />
+            <span><b>{book.sourceName || 'Источник учебника'} · этот учебник</b><small>{taskSearch.trim() ? `Открыть учебник и найти задание ${taskSearch.trim()}` : 'Открыть страницу учебника'}</small></span>
+            <Icon>open_in_new</Icon>
+          </button>}
           {availableProviders.map((provider) => (
             <button className="solution-item provider-search" key={provider.domain} onClick={() => onOpenLink(sourceUrl(provider.domain))}>
               <span className="provider-logo provider-brand"><img src={provider.icon} alt="" /></span>
@@ -255,7 +269,7 @@ export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenL
               <Icon>open_in_new</Icon>
             </button>
           ))}
-          {!filtered.length && !availableProviders.length && <div className="verified-empty"><Icon>fact_check</Icon><span><b>Подтверждённых ГДЗ не найдено</b><small>Для этого предмета и класса ни один проверенный источник пока не заявлен.</small></span></div>}
+          {!filtered.length && !availableProviders.length && !book.sourceUrl && <div className="verified-empty"><Icon>fact_check</Icon><span><b>Подтверждённых ГДЗ не найдено</b><small>Для этого предмета и класса ни один проверенный источник пока не заявлен.</small></span></div>}
         </div>
         <div className="source-note"><Icon>info</Icon><p>Решариум хранит каталог ссылок. Содержимое решения открывается на сайте-источнике и принадлежит его правообладателю.</p></div>
       </aside>
@@ -405,22 +419,35 @@ export function UpdateControl() {
 
   useEffect(() => {
     const desktop = window.desktop
-    if (!desktop) return
-    void desktop.getUpdateState().then(setState)
-    return desktop.onUpdateState(setState)
+    if (desktop) {
+      void desktop.getUpdateState().then(setState)
+      return desktop.onUpdateState(setState)
+    }
+    if (isNativeAndroid) {
+      void getAndroidUpdateState().then(setState).then(() => checkAndroidUpdate().then(setState))
+    }
   }, [])
 
-  if (!window.desktop || !state) return null
+  if ((!window.desktop && !isNativeAndroid) || !state) return null
   const busy = state.status === 'checking' || state.status === 'downloading'
   const label = state.status === 'checking' ? 'Проверка…'
     : state.status === 'downloading' ? `Загрузка ${state.progress || 0}%`
-      : state.status === 'downloaded' ? `Установить ${state.availableVersion}`
+      : state.status === 'available' ? `Скачать ${state.availableVersion}`
+        : state.status === 'downloaded' ? `Установить ${state.availableVersion}`
         : state.status === 'not-available' ? `Версия ${state.currentVersion} актуальна`
           : state.status === 'error' ? 'Повторить проверку'
             : `Версия ${state.currentVersion}`
-  const icon = state.status === 'downloaded' ? 'restart_alt' : state.status === 'not-available' ? 'check_circle' : 'system_update'
+  const icon = state.status === 'downloaded' ? 'restart_alt' : state.status === 'available' ? 'download' : state.status === 'not-available' ? 'check_circle' : 'system_update'
 
-  return <button className={`update-control ${state.status}`} type="button" disabled={busy} title={state.message || 'Проверить обновления'} onClick={() => state.status === 'downloaded' ? void window.desktop?.installUpdate() : void window.desktop?.checkForUpdates()}><Icon>{icon}</Icon>{label}</button>
+  const activate = () => {
+    if (isNativeAndroid) {
+      if (state.status === 'available') void installAndroidUpdate()
+      else { setState({ ...state, status: 'checking' }); void checkAndroidUpdate().then(setState) }
+    } else if (state.status === 'downloaded') void window.desktop?.installUpdate()
+    else void window.desktop?.checkForUpdates()
+  }
+
+  return <button className={`update-control ${state.status}`} type="button" disabled={busy} title={state.message || 'Проверить обновления'} onClick={activate}><Icon>{icon}</Icon>{label}</button>
 }
 
 export function Toast({ message, onDone }: { message: string; onDone: () => void }) {
@@ -467,7 +494,7 @@ export function CollectionsPage({ collections, activeId, books, favorites, sourc
     const collectionBooks = books.filter((book) => active.bookIds.includes(book.id))
     return <section className="collections-page"><button className="back-link" onClick={() => onActive(null)}><Icon>arrow_back</Icon>Все подборки</button><BookGrid books={collectionBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={onFavorite} onOpen={onOpen} title={active.name} /></section>
   }
-  return <section className="collections-page"><div className="collection-heading"><div><span className="eyebrow">Личная библиотека</span><h1>Мои подборки</h1><p>Создавайте свои наборы предметов и учебников. Они сохраняются на этом компьютере.</p></div><button className="primary" onClick={onCreate}><Icon>create_new_folder</Icon>Новая подборка</button></div>
+  return <section className="collections-page"><div className="collection-heading"><div><span className="eyebrow">Личная библиотека</span><h1>Мои подборки</h1><p>Создавайте свои наборы учебников. После входа они синхронизируются между устройствами.</p></div><button className="primary" onClick={onCreate}><Icon>create_new_folder</Icon>Новая подборка</button></div>
     {collections.length ? <div className="collection-grid">{collections.map((collection) => <article key={collection.id} onClick={() => onActive(collection.id)}><span className="collection-icon"><Icon>folder_special</Icon></span><div><h3>{collection.name}</h3><p>{collection.bookIds.length} разделов</p></div><button title="Удалить" onClick={(event) => { event.stopPropagation(); onDelete(collection.id) }}><Icon>delete</Icon></button></article>)}</div> : <EmptyState title="Подборок пока нет" text="Создайте первую подборку и добавляйте в неё нужные разделы из каталога." />}
   </section>
 }

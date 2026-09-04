@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { books, providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor } from './data'
+import { books, providerIconFor, providerSearchesFor, solutionIconFor } from './data'
 
 function section(grade: number, subject: string) {
   const book = books.find((item) => item.grade === grade && item.subject === subject)
@@ -13,16 +13,17 @@ describe('verified provider availability', () => {
   })
 
   it('does not claim a labor-training GDZ exists', () => {
-    expect(providerSearchesFor(section(7, 'Трудовое обучение'))).toEqual([])
-    expect(providerOptionsFor(section(7, 'Трудовое обучение'))).toEqual(['Другое'])
+    expect(books.some((item) => item.grade === 7 && item.subject === 'Трудовое обучение')).toBe(false)
   })
 
   it('does not list the textbook-only Padruchnik catalog as a GDZ provider', () => {
     expect(providerSearchesFor(section(7, 'Химия')).some((item) => item.domain === 'padruchnik.com')).toBe(false)
   })
 
-  it('offers the verified GDZ.by source for grade 7 life safety', () => {
-    expect(providerSearchesFor(section(7, 'ОБЖ')).map((item) => item.domain)).toEqual(['gdz.by'])
+  it('contains the complete current Resheba catalog snapshot', () => {
+    expect(books).toHaveLength(153)
+    expect(books.filter((item) => item.grade === 7)).toHaveLength(22)
+    expect(section(7, 'Химия').sourceUrl).toMatch(/^https:\/\/resheba\.top\//)
   })
 
   it('has a real favicon for every automatic provider', () => {
