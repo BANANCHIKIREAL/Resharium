@@ -4,6 +4,7 @@ import { books, demoSolutions, providerSearchesFor } from './data'
 import type { Book, BookCollection, SolutionLink, View } from './types'
 import { createSupabase, getStoredSettings } from './lib/supabase'
 import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, ProfilePage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
+import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage } from './mobile'
 
 const FAVORITES_KEY = 'resharium.favorites'
 const LOCAL_SOLUTIONS_KEY = 'resharium.solutions'
@@ -76,6 +77,19 @@ export default function App() {
     window.desktop?.getPendingAuthUrl().then((url) => { if (url) void handleAuthCallback(url) })
     return () => { authListener.subscription.unsubscribe(); unsubscribeDesktop?.() }
   }, [client, handleAuthCallback])
+
+  useEffect(() => {
+    if (!isNativeAndroid) return
+    let stopped = false
+    let removeListener: () => void = () => {}
+    void listenForNativeUrls((url) => {
+      void handleAuthCallback(url).finally(() => void closeNativePage())
+    }).then((remove) => {
+      if (stopped) remove()
+      else removeListener = remove
+    })
+    return () => { stopped = true; removeListener() }
+  }, [handleAuthCallback])
 
   useEffect(() => {
     let active = true
@@ -227,11 +241,12 @@ export default function App() {
     } catch {
       return 'Не удалось проверить настройку Google-входа'
     }
-    const redirectTo = window.desktop ? 'resharium://auth/callback' : `${window.location.origin}/auth/callback`
+    const redirectTo = window.desktop || isNativeAndroid ? 'resharium://auth/callback' : `${window.location.origin}/auth/callback`
     const { data, error } = await client.auth.signInWithOAuth({ provider: 'google', options: { redirectTo, skipBrowserRedirect: true } })
     if (error) return error.message
     if (data.url) {
-      if (window.desktop) await window.desktop.openExternal(data.url)
+      if (isNativeAndroid) await openNativePage(data.url)
+      else if (window.desktop) await window.desktop.openExternal(data.url)
       else window.location.assign(data.url)
     }
     return null
@@ -248,13 +263,15 @@ export default function App() {
 
   function openLink(url: string) {
     if (!safeHttpUrl(url)) return setToast('Небезопасная ссылка заблокирована')
-    if (window.desktop) setBrowserUrl(url)
+    if (isNativeAndroid) void openNativePage(url)
+    else if (window.desktop) setBrowserUrl(url)
     else window.open(url, '_blank', 'noopener,noreferrer')
   }
 
   async function openExternal(url: string) {
     if (!safeHttpUrl(url)) return
-    if (window.desktop) await window.desktop.openExternal(url)
+    if (isNativeAndroid) await openNativePage(url)
+    else if (window.desktop) await window.desktop.openExternal(url)
     else window.open(url, '_blank', 'noopener,noreferrer')
   }
 

@@ -20,3 +20,13 @@ guest-profile-check.png
 
 .DS_Store
 Thumbs.db
+
+android/.gradle/
+android/.idea/
+android/local.properties
+android/keystore.properties
+android/resharium-release.jks
+android/app/build/
+android/build/
+android/capacitor-cordova-android-plugins/build/
+.tools/
