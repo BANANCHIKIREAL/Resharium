@@ -329,12 +329,13 @@ export function Modal({ title, subtitle, onClose, children }: { title: string; s
   return <div className="overlay modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="modal"><div className="modal-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button className="icon-btn" onClick={onClose}><Icon>close</Icon></button></div>{children}</div></div>
 }
 
-export function AuthModal({ connected, googleEnabled, user, onGoogle, onEmail, onSignOut, onClose }: {
+export function AuthModal({ connected, googleEnabled, user, onGoogle, onEmail, onResend, onSignOut, onClose }: {
   connected: boolean
   googleEnabled: boolean
   user: User | null
   onGoogle: () => Promise<string | null>
   onEmail: (mode: 'login' | 'signup', email: string, password: string) => Promise<string | null>
+  onResend: (email: string) => Promise<string | null>
   onSignOut: () => void
   onClose: () => void
 }) {
@@ -343,18 +344,41 @@ export function AuthModal({ connected, googleEnabled, user, onGoogle, onEmail, o
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(false)
+  const [confirmationEmail, setConfirmationEmail] = useState('')
+  const [resendCooldown, setResendCooldown] = useState(0)
+  useEffect(() => {
+    if (resendCooldown <= 0) return
+    const timer = window.setInterval(() => setResendCooldown((value) => Math.max(0, value - 1)), 1000)
+    return () => window.clearInterval(timer)
+  }, [resendCooldown])
   async function run(action: () => Promise<string | null>) { setLoading(true); setError(''); const result = await action(); setLoading(false); if (result) setError(result) }
+  async function submitEmail() {
+    setLoading(true); setError('')
+    const result = await onEmail(mode, email, password)
+    setLoading(false)
+    if (result) setError(result)
+    else if (mode === 'signup') { setConfirmationEmail(email); setResendCooldown(60) }
+  }
+  async function resend() {
+    if (!confirmationEmail || resendCooldown > 0) return
+    setLoading(true); setError('')
+    const result = await onResend(confirmationEmail)
+    setLoading(false)
+    if (result) setError(result)
+    else setResendCooldown(60)
+  }
   if (user) return <Modal title="Аккаунт" subtitle="Синхронизация профиля включена" onClose={onClose}><div className="signed-profile"><UserAvatar user={user} className="big" /><h3>{user.user_metadata?.full_name || 'Пользователь'}</h3><p>{user.email}</p><button className="danger-soft" onClick={() => { onSignOut(); onClose() }}><Icon>logout</Icon>Выйти из аккаунта</button></div></Modal>
   return <Modal title={mode === 'login' ? 'Добро пожаловать' : 'Создать аккаунт'} subtitle="Сохраняйте профиль и решения на всех устройствах" onClose={onClose}>
-    {!connected ? <div className="not-connected"><span><Icon>cloud_off</Icon></span><h3>Сервис аккаунтов недоступен</h3><p>Проверьте подключение к интернету и попробуйте ещё раз.</p></div> : <form className="modal-form auth-form" onSubmit={(event) => { event.preventDefault(); run(() => onEmail(mode, email, password)) }}>
+    {!connected ? <div className="not-connected"><span><Icon>cloud_off</Icon></span><h3>Сервис аккаунтов недоступен</h3><p>Проверьте подключение к интернету и попробуйте ещё раз.</p></div> : <form className="modal-form auth-form" onSubmit={(event) => { event.preventDefault(); void submitEmail() }}>
       <button type="button" className="google-btn" disabled={loading || !googleEnabled} onClick={() => run(onGoogle)}><img className="google-g" src={new URL('../assets/google-g.png', import.meta.url).href} alt="" />Продолжить с Google</button>
       {!googleEnabled && <div className="auth-notice"><Icon>info</Icon><span>Вход через Google скоро будет доступен. Пока используйте email.</span></div>}
       <div className="divider"><span>или</span></div>
       <label><span>Email</span><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></label>
       <label><span>Пароль</span><input type="password" minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Не менее 6 символов" /></label>
       {error && <p className="form-error">{error}</p>}
+      {confirmationEmail && mode === 'signup' && <div className="confirmation-box"><Icon>mark_email_read</Icon><div><b>Письмо отправлено на {confirmationEmail}</b><span>Проверьте папки «Спам» и «Промоакции».</span><button type="button" disabled={loading || resendCooldown > 0} onClick={() => void resend()}>{resendCooldown > 0 ? `Отправить ещё раз через ${resendCooldown} сек.` : 'Отправить письмо ещё раз'}</button></div></div>}
       <button className="primary wide" disabled={loading}>{loading ? 'Подождите…' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}</button>
-      <button type="button" className="text-btn" onClick={() => setMode(mode === 'login' ? 'signup' : 'login')}>{mode === 'login' ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти'}</button>
+      <button type="button" className="text-btn" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setConfirmationEmail(''); setError('') }}>{mode === 'login' ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти'}</button>
     </form>}
   </Modal>
 }

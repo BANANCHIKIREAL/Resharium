@@ -356,10 +356,34 @@ export default function App() {
 
   async function emailAuth(mode: 'login' | 'signup', email: string, password: string) {
     if (!client) return 'Сначала подключите Supabase'
-    const result = mode === 'login' ? await client.auth.signInWithPassword({ email, password }) : await client.auth.signUp({ email, password })
-    if (result.error) return result.error.message
+    const redirectTo = window.desktop || isNativeAndroid ? 'resharium://auth/callback' : `${window.location.origin}/auth/callback`
+    const result = mode === 'login'
+      ? await client.auth.signInWithPassword({ email, password })
+      : await client.auth.signUp({ email, password, options: { emailRedirectTo: redirectTo } })
+    if (result.error) {
+      const wait = result.error.message.match(/after (\d+) seconds?/i)?.[1]
+      if (result.error.status === 429 || result.error.code === 'over_email_send_rate_limit') {
+        return wait ? `Подождите ${wait} сек. перед повторной отправкой` : 'Слишком много попыток. Подождите минуту и попробуйте снова'
+      }
+      return result.error.message
+    }
     if (mode === 'signup' && !result.data.session) setToast('Проверьте почту для подтверждения')
     else { setToast('Вход выполнен'); setShowAuth(false) }
+    return null
+  }
+
+  async function resendConfirmation(email: string) {
+    if (!client) return 'Сервис аккаунтов недоступен'
+    const redirectTo = window.desktop || isNativeAndroid ? 'resharium://auth/callback' : `${window.location.origin}/auth/callback`
+    const { error } = await client.auth.resend({ type: 'signup', email, options: { emailRedirectTo: redirectTo } })
+    if (error) {
+      const wait = error.message.match(/after (\d+) seconds?/i)?.[1]
+      if (error.status === 429 || error.code === 'over_email_send_rate_limit') {
+        return wait ? `Подождите ${wait} сек. перед повторной отправкой` : 'Слишком много попыток. Подождите минуту и попробуйте снова'
+      }
+      return error.message
+    }
+    setToast('Письмо отправлено повторно')
     return null
   }
 
@@ -398,7 +422,7 @@ export default function App() {
     </main>
     {selectedBook && <BookDrawer book={selectedBook} solutions={publicSolutions.filter((item) => item.book_key === selectedBook.id)} onClose={() => setSelectedBook(null)} onAdd={() => setShowAdd(true)} onCollect={() => { setCollectionBook(selectedBook); setShowCollection(true) }} onOpenLink={openLink} />}
     {showAdd && <AddSolutionModal books={books} initialBook={selectedBook} onClose={() => setShowAdd(false)} onSubmit={addSolution} requireAuth={!user} />}
-    {showAuth && <AuthModal connected={Boolean(client)} googleEnabled={googleEnabled} user={user} onGoogle={googleLogin} onEmail={emailAuth} onSignOut={() => client?.auth.signOut()} onClose={() => setShowAuth(false)} />}
+    {showAuth && <AuthModal connected={Boolean(client)} googleEnabled={googleEnabled} user={user} onGoogle={googleLogin} onEmail={emailAuth} onResend={resendConfirmation} onSignOut={() => client?.auth.signOut()} onClose={() => setShowAuth(false)} />}
     {showCollection && <CollectionModal collections={collections} book={collectionBook} onCreate={createCollection} onAdd={addToCollection} onClose={() => setShowCollection(false)} />}
     {browserUrl && <SourceBrowser url={browserUrl} onClose={() => setBrowserUrl('')} onExternal={openExternal} />}
     {toast && <Toast message={toast} onDone={() => setToast('')} />}

@@ -32,3 +32,4 @@ android/build/
 android/capacitor-cordova-android-plugins/build/
 .tools/
 .smoke-profile-*/
+.tmp-installer-test-profile/
