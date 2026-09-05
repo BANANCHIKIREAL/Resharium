@@ -3,6 +3,7 @@ import type { User } from '@supabase/supabase-js'
 import type { Book, BookCollection, SolutionLink, UpdateState, View } from './types'
 import { providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor, subjects } from './data'
 import { profileAvatarUrl } from './avatar'
+import { Icon, type IconName } from './icons'
 import { checkAndroidUpdate, getAndroidUpdateState, installAndroidUpdate, isNativeAndroid } from './mobile'
 
 function bookCoverStyle(book: Book) {
@@ -13,16 +14,12 @@ function bookCoverStyle(book: Book) {
   } as React.CSSProperties
 }
 
-export function Icon({ children, filled = false }: { children: string; filled?: boolean }) {
-  return <span className={`material-symbols-rounded${filled ? ' filled' : ''}`} aria-hidden="true">{children}</span>
-}
-
 function ProviderLogo({ provider, url }: { provider: string; url: string }) {
   const [failed, setFailed] = useState(false)
   const icon = solutionIconFor(provider, url)
   useEffect(() => setFailed(false), [icon])
   return <span className={`provider-logo${icon && !failed ? ' provider-brand' : ''}`}>
-    {icon && !failed ? <img src={icon} alt="" onError={() => setFailed(true)} /> : <Icon>link</Icon>}
+    {icon && !failed ? <img src={icon} alt="" onError={() => setFailed(true)} /> : <Icon name="link" />}
   </span>
 }
 
@@ -32,13 +29,13 @@ function UserAvatar({ user, className = '' }: { user: User | null; className?: s
 
   useEffect(() => setImageFailed(false), [avatarUrl])
 
-  return <span className={`avatar ${className}${user ? ' signed' : ' guest'}`}>{avatarUrl && !imageFailed ? <img src={avatarUrl} alt="Фото профиля" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} /> : <Icon>{user ? 'person' : 'person_outline'}</Icon>}</span>
+  return <span className={`avatar ${className}${user ? ' signed' : ' guest'}`}>{avatarUrl && !imageFailed ? <img src={avatarUrl} alt="Фото профиля" referrerPolicy="no-referrer" onError={() => setImageFailed(true)} /> : <Icon name={user ? 'person' : 'person_outline'} />}</span>
 }
 
 export function Brand({ compact = false }: { compact?: boolean }) {
   return (
     <div className="brand">
-      <div className="brand-mark"><Icon>auto_stories</Icon><span className="brand-spark" /></div>
+      <div className="brand-mark"><Icon name="auto_stories" /><span className="brand-spark" /></div>
       {!compact && <div><strong>Решариум</strong><small>Всё получится</small></div>}
     </div>
   )
@@ -51,7 +48,7 @@ export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
   user: User | null
   isAdmin: boolean
 }) {
-  const nav: Array<{ id: View; icon: string; label: string }> = [
+  const nav: Array<{ id: View; icon: IconName; label: string }> = [
     { id: 'home' as const, icon: 'space_dashboard', label: 'Главная' },
     { id: 'catalog' as const, icon: 'local_library', label: 'Каталог' },
     { id: 'favorites' as const, icon: 'bookmark', label: 'Избранное' },
@@ -64,11 +61,11 @@ export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
       <nav>
         {nav.map((item) => (
           <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => onView(item.id)}>
-            <Icon filled={view === item.id}>{item.icon}</Icon><span>{item.label}</span>
+            <Icon filled={view === item.id} name={item.icon} /><span>{item.label}</span>
           </button>
         ))}
       </nav>
-      <button className="add-quick" onClick={onAdd}><Icon>add</Icon><span>Добавить решение</span></button>
+      <button className="add-quick" onClick={onAdd}><Icon name="add" /><span>Добавить решение</span></button>
       <div className="sidebar-bottom">
         <button onClick={() => onView('profile')} className="mini-profile">
           <UserAvatar user={user} />
@@ -87,11 +84,11 @@ export function Topbar({ query, setQuery, onAuth }: {
   return (
     <header className="topbar">
       <label className="global-search">
-        <Icon>search</Icon>
+        <Icon name="search" />
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Учебник, автор, предмет или задание..." />
         <kbd>Ctrl K</kbd>
       </label>
-      <button className="icon-btn" onClick={onAuth} title="Аккаунт"><Icon>account_circle</Icon></button>
+      <button className="icon-btn" onClick={onAuth} title="Аккаунт"><Icon name="account_circle" /></button>
     </header>
   )
 }
@@ -101,16 +98,16 @@ export function Hero({ onCatalog }: { onCatalog: () => void }) {
     <section className="hero-card">
       <div className="hero-glow one" /><div className="hero-glow two" />
       <div className="hero-copy">
-        <span className="eyebrow"><Icon>bolt</Icon> Учиться стало проще</span>
+        <span className="eyebrow"><Icon name="bolt" /> Учиться стало проще</span>
         <h1>Найди решение.<br/><em>Пойми ход мысли.</em></h1>
         <p>Все нужные источники в одном аккуратном каталоге. Выбирай учебник, номер задания и открывай проверенное решение.</p>
-        <button className="primary" onClick={onCatalog}>Открыть каталог <Icon>arrow_forward</Icon></button>
+        <button className="primary" onClick={onCatalog}>Открыть каталог <Icon name="arrow_forward" /></button>
       </div>
       <div className="hero-art" aria-hidden="true">
         <div className="orbit orbit-a"><span /></div>
         <div className="orbit orbit-b"><span /></div>
-        <div className="floating-book book-back"><Icon>menu_book</Icon></div>
-        <div className="floating-book book-main"><Icon>auto_stories</Icon><span className="check"><Icon>check</Icon></span></div>
+        <div className="floating-book book-back"><Icon name="menu_book" /></div>
+        <div className="floating-book book-main"><Icon name="auto_stories" /><span className="check"><Icon name="check" /></span></div>
         <div className="math-chip chip-a">π</div><div className="math-chip chip-b">x²</div><div className="math-chip chip-c">∑</div>
       </div>
     </section>
@@ -120,10 +117,10 @@ export function Hero({ onCatalog }: { onCatalog: () => void }) {
 export function SubjectRow({ active, onSelect }: { active: string; onSelect: (subject: string) => void }) {
   return (
     <div className="subject-row">
-      <button className={!active ? 'active' : ''} onClick={() => onSelect('')}><span className="subject-icon all"><Icon>apps</Icon></span><span>Все</span></button>
+      <button className={!active ? 'active' : ''} onClick={() => onSelect('')}><span className="subject-icon all"><Icon name="apps" /></span><span>Все</span></button>
       {subjects.map((subject) => (
         <button key={subject.name} className={active === subject.name ? 'active' : ''} onClick={() => onSelect(subject.name)}>
-          <span className="subject-icon" style={{ '--subject-color': subject.color } as React.CSSProperties}><Icon>{subject.icon}</Icon></span>
+          <span className="subject-icon" style={{ '--subject-color': subject.color } as React.CSSProperties}><Icon name={subject.icon} /></span>
           <span>{subject.name}</span>
         </button>
       ))}
@@ -167,7 +164,7 @@ export function GradePicker({ grade, onSelect }: { grade: number; onSelect: (gra
 
   return <div className={`grade-picker${open ? ' open' : ''}${dropUp ? ' drop-up' : ''}`} ref={pickerRef}>
     <button type="button" className="grade-trigger" aria-haspopup="listbox" aria-expanded={open} onClick={toggle}>
-      <span>Класс</span><b>{grade || 'Все'}</b><Icon>expand_more</Icon>
+      <span>Класс</span><b>{grade || 'Все'}</b><Icon name={open ? 'expand_less' : 'expand_more'} />
     </button>
     {open && <div className="grade-menu" role="listbox" aria-label="Выбор класса">
       <button type="button" role="option" aria-selected={!grade} className={!grade ? 'active' : ''} onClick={() => choose(0)}>Все классы</button>
@@ -185,17 +182,17 @@ export function BookCard({ book, favorite, sourceCount, onFavorite, onOpen }: {
 }) {
   return (
     <article className="book-card" onClick={onOpen}>
-      <button className={`bookmark ${favorite ? 'saved' : ''}`} onClick={(event) => { event.stopPropagation(); onFavorite() }}>
-        <Icon filled={favorite}>bookmark</Icon>
+      <button className={`bookmark ${favorite ? 'saved' : ''}`} aria-label={favorite ? 'Убрать из избранного' : 'В избранное'} aria-pressed={favorite} onClick={(event) => { event.stopPropagation(); onFavorite() }}>
+        <Icon filled={favorite} name="bookmark" />
       </button>
       <div className="book-cover" style={bookCoverStyle(book)}>
-        {book.coverUrl ? <img src={book.coverUrl} alt="" /> : <><span className="cover-grade">{book.grade}</span><Icon>auto_stories</Icon><small>{book.grade} класс</small><b>{book.title}</b></>}
+        {book.coverUrl ? <img src={book.coverUrl} alt="" /> : <><span className="cover-grade">{book.grade}</span><Icon name="auto_stories" /><small>{book.grade} класс</small><b>{book.title}</b></>}
       </div>
       <div className="book-info">
         <span className="grade-pill">{book.grade} класс</span>
         <h3>{book.title}</h3>
         <p>{book.author}</p>
-        <footer><span><Icon>link</Icon>{sourceCount} {sourceCount === 1 ? 'ссылка' : 'ссылок'}</span><button><Icon>arrow_forward</Icon></button></footer>
+        <footer><span><Icon name="link" />{sourceCount} {sourceCount === 1 ? 'ссылка' : 'ссылок'}</span><button aria-label={`Открыть ${book.title}`}><Icon name="arrow_forward" /></button></footer>
       </div>
     </article>
   )
@@ -218,7 +215,7 @@ export function BookGrid({ books, favorites, sourceCounts, onFavorite, onOpen, t
 }
 
 export function EmptyState({ title, text }: { title: string; text: string }) {
-  return <div className="empty"><span><Icon>search_off</Icon></span><h3>{title}</h3><p>{text}</p></div>
+  return <div className="empty"><span><Icon name="search_off" /></span><h3>{title}</h3><p>{text}</p></div>
 }
 
 export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenLink }: {
@@ -239,39 +236,39 @@ export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenL
     <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <aside className="drawer">
         <div className="drawer-head">
-          <button className="icon-btn" onClick={onClose}><Icon>close</Icon></button>
+          <button className="icon-btn" aria-label="Закрыть учебник" onClick={onClose}><Icon name="close" /></button>
           <span>Карточка учебника</span>
-          <div className="drawer-actions"><button className="soft-btn" onClick={onCollect}><Icon>folder_special</Icon> В подборку</button><button className="soft-btn" onClick={onAdd}><Icon>add_link</Icon> Ссылка</button></div>
+          <div className="drawer-actions"><button className="soft-btn" onClick={onCollect}><Icon name="folder_special" /> В подборку</button><button className="soft-btn" onClick={onAdd}><Icon name="add_link" /> Ссылка</button></div>
         </div>
         <div className="drawer-book">
-          <div className="book-cover large" style={bookCoverStyle(book)}>{book.coverUrl ? <img src={book.coverUrl} alt={`Обложка: ${book.title}`} /> : <><span className="cover-grade">{book.grade}</span><Icon>auto_stories</Icon><small>{book.grade} класс</small><b>{book.title}</b></>}</div>
-          <div><span className="grade-pill">{book.grade} класс{book.year ? ` · ${book.year}` : ''}</span><h2>{book.title}</h2><p>{book.author}</p><span className="verified"><Icon>verified</Icon> Каталог источников</span></div>
+          <div className="book-cover large" style={bookCoverStyle(book)}>{book.coverUrl ? <img src={book.coverUrl} alt={`Обложка: ${book.title}`} /> : <><span className="cover-grade">{book.grade}</span><Icon name="auto_stories" /><small>{book.grade} класс</small><b>{book.title}</b></>}</div>
+          <div><span className="grade-pill">{book.grade} класс{book.year ? ` · ${book.year}` : ''}</span><h2>{book.title}</h2><p>{book.author}</p><span className="verified"><Icon name="verified" /> Каталог источников</span></div>
         </div>
-        <label className="task-search"><Icon>search</Icon><input value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} placeholder="Введите номер задания" /></label>
+        <label className="task-search"><Icon name="search" /><input value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} placeholder="Введите номер задания" /></label>
         <div className="solution-list">
           <div className="list-head"><b>{taskSearch.trim() ? `Источники для «${taskSearch.trim()}»` : 'Все доступные источники'}</b><span>{filtered.length + availableProviders.length + (book.sourceUrl ? 1 : 0)}</span></div>
           {filtered.map((item) => (
             <button className="solution-item" key={item.id} onClick={() => onOpenLink(item.url)}>
               <ProviderLogo provider={item.provider} url={item.url} />
               <span><b>{item.task}</b><small>{item.provider} · {item.note || 'Внешний источник'}</small></span>
-              <Icon>open_in_new</Icon>
+              <Icon name="open_in_new" />
             </button>
           ))}
           {book.sourceUrl && <button className="solution-item provider-search" onClick={() => onOpenLink(book.sourceUrl!)}>
             <ProviderLogo provider={book.sourceName || 'Решёба'} url={book.sourceUrl} />
             <span><b>{book.sourceName || 'Источник учебника'} · этот учебник</b><small>{taskSearch.trim() ? `Открыть учебник и найти задание ${taskSearch.trim()}` : 'Открыть страницу учебника'}</small></span>
-            <Icon>open_in_new</Icon>
+            <Icon name="open_in_new" />
           </button>}
           {availableProviders.map((provider) => (
             <button className="solution-item provider-search" key={provider.domain} onClick={() => onOpenLink(sourceUrl(provider.domain))}>
               <span className="provider-logo provider-brand"><img src={provider.icon} alt="" /></span>
               <span><b>{provider.name}</b><small>{taskSearch.trim() ? `Найти задание ${taskSearch.trim()} · ${provider.region}` : `Открыть каталог · ${provider.region}`}</small></span>
-              <Icon>open_in_new</Icon>
+              <Icon name="open_in_new" />
             </button>
           ))}
-          {!filtered.length && !availableProviders.length && !book.sourceUrl && <div className="verified-empty"><Icon>fact_check</Icon><span><b>Подтверждённых ГДЗ не найдено</b><small>Для этого предмета и класса ни один проверенный источник пока не заявлен.</small></span></div>}
+          {!filtered.length && !availableProviders.length && !book.sourceUrl && <div className="verified-empty"><Icon name="fact_check" /><span><b>Подтверждённых ГДЗ не найдено</b><small>Для этого предмета и класса ни один проверенный источник пока не заявлен.</small></span></div>}
         </div>
-        <div className="source-note"><Icon>info</Icon><p>Решариум хранит каталог ссылок. Содержимое решения открывается на сайте-источнике и принадлежит его правообладателю.</p></div>
+        <div className="source-note"><Icon name="info" /><p>Решариум хранит каталог ссылок. Содержимое решения открывается на сайте-источнике и принадлежит его правообладателю.</p></div>
       </aside>
     </div>
   )
@@ -305,28 +302,28 @@ export function AddSolutionModal({ books, initialBook, onClose, onSubmit, requir
   return (
     <Modal title="Добавить ссылку на решение" subtitle={requireAuth ? 'Ссылка сохранится только на этом устройстве' : 'Ссылка появится у подключённых пользователей'} onClose={onClose}>
       <form className="modal-form" onSubmit={submit}>
-        {requireAuth && <div className="warning"><Icon>save</Icon>Вы работаете без аккаунта — ссылка останется только на этом устройстве. После входа ссылки можно публиковать для всех.</div>}
+        {requireAuth && <div className="warning"><Icon name="save" />Вы работаете без аккаунта — ссылка останется только на этом устройстве. После входа ссылки можно публиковать для всех.</div>}
         <label><span>Учебник</span><select value={bookKey} onChange={(event) => setBookKey(event.target.value)}>{books.map((book) => <option key={book.id} value={book.id}>{book.title} · {book.grade} класс · {book.author}</option>)}</select></label>
         <div className="source-field">
           <span>Источник</span>
           <div className="source-picker" role="radiogroup" aria-label="Источник решения">
             {providerOptions.map((item) => {
               const icon = providerIconFor(item)
-              return <button type="button" role="radio" aria-checked={provider === item} className={provider === item ? 'selected' : ''} key={item} onClick={() => setProvider(item)}>{icon ? <img src={icon} alt="" /> : <Icon>link</Icon>}<span>{item}</span></button>
+              return <button type="button" role="radio" aria-checked={provider === item} className={provider === item ? 'selected' : ''} key={item} onClick={() => setProvider(item)}>{icon ? <img src={icon} alt="" /> : <Icon name="link" />}<span>{item}</span></button>
             })}
           </div>
         </div>
         <label><span>Ссылка на страницу решения</span><input type="url" required value={url} onChange={(event) => setUrl(event.target.value)} placeholder="https://..." /></label>
         <label><span>Комментарий</span><textarea value={note} onChange={(event) => setNote(event.target.value)} placeholder="Что находится по ссылке" /></label>
         {error && <p className="form-error">{error}</p>}
-        <div className="modal-actions"><button type="button" className="ghost" onClick={onClose}>Отмена</button><button className="primary" disabled={saving}>{saving ? 'Сохраняем…' : requireAuth ? 'Сохранить на устройстве' : 'Опубликовать для всех'}<Icon>{requireAuth ? 'save' : 'arrow_upward'}</Icon></button></div>
+        <div className="modal-actions"><button type="button" className="ghost" onClick={onClose}>Отмена</button><button className="primary" disabled={saving}>{saving ? 'Сохраняем…' : requireAuth ? 'Сохранить на устройстве' : 'Опубликовать для всех'}<Icon name={requireAuth ? 'save' : 'arrow_upward'} /></button></div>
       </form>
     </Modal>
   )
 }
 
 export function Modal({ title, subtitle, onClose, children }: { title: string; subtitle?: string; onClose: () => void; children: React.ReactNode }) {
-  return <div className="overlay modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="modal"><div className="modal-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button className="icon-btn" onClick={onClose}><Icon>close</Icon></button></div>{children}</div></div>
+  return <div className="overlay modal-overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}><div className="modal"><div className="modal-head"><div><h2>{title}</h2>{subtitle && <p>{subtitle}</p>}</div><button className="icon-btn" aria-label="Закрыть окно" onClick={onClose}><Icon name="close" /></button></div>{children}</div></div>
 }
 
 export function AuthModal({ connected, googleEnabled, user, onGoogle, onEmail, onResend, onSignOut, onClose }: {
@@ -367,16 +364,16 @@ export function AuthModal({ connected, googleEnabled, user, onGoogle, onEmail, o
     if (result) setError(result)
     else setResendCooldown(60)
   }
-  if (user) return <Modal title="Аккаунт" subtitle="Синхронизация профиля включена" onClose={onClose}><div className="signed-profile"><UserAvatar user={user} className="big" /><h3>{user.user_metadata?.full_name || 'Пользователь'}</h3><p>{user.email}</p><button className="danger-soft" onClick={() => { onSignOut(); onClose() }}><Icon>logout</Icon>Выйти из аккаунта</button></div></Modal>
+  if (user) return <Modal title="Аккаунт" subtitle="Синхронизация профиля включена" onClose={onClose}><div className="signed-profile"><UserAvatar user={user} className="big" /><h3>{user.user_metadata?.full_name || 'Пользователь'}</h3><p>{user.email}</p><button className="danger-soft" onClick={() => { onSignOut(); onClose() }}><Icon name="logout" />Выйти из аккаунта</button></div></Modal>
   return <Modal title={mode === 'login' ? 'Добро пожаловать' : 'Создать аккаунт'} subtitle="Сохраняйте профиль и решения на всех устройствах" onClose={onClose}>
-    {!connected ? <div className="not-connected"><span><Icon>cloud_off</Icon></span><h3>Сервис аккаунтов недоступен</h3><p>Проверьте подключение к интернету и попробуйте ещё раз.</p></div> : <form className="modal-form auth-form" onSubmit={(event) => { event.preventDefault(); void submitEmail() }}>
+    {!connected ? <div className="not-connected"><span><Icon name="cloud_off" /></span><h3>Сервис аккаунтов недоступен</h3><p>Проверьте подключение к интернету и попробуйте ещё раз.</p></div> : <form className="modal-form auth-form" onSubmit={(event) => { event.preventDefault(); void submitEmail() }}>
       <button type="button" className="google-btn" disabled={loading || !googleEnabled} onClick={() => run(onGoogle)}><img className="google-g" src={new URL('../assets/google-g.png', import.meta.url).href} alt="" />Продолжить с Google</button>
-      {!googleEnabled && <div className="auth-notice"><Icon>info</Icon><span>Вход через Google скоро будет доступен. Пока используйте email.</span></div>}
+      {!googleEnabled && <div className="auth-notice"><Icon name="info" /><span>Вход через Google скоро будет доступен. Пока используйте email.</span></div>}
       <div className="divider"><span>или</span></div>
       <label><span>Email</span><input type="email" required value={email} onChange={(event) => setEmail(event.target.value)} placeholder="name@example.com" /></label>
       <label><span>Пароль</span><input type="password" minLength={6} required value={password} onChange={(event) => setPassword(event.target.value)} placeholder="Не менее 6 символов" /></label>
       {error && <p className="form-error">{error}</p>}
-      {confirmationEmail && mode === 'signup' && <div className="confirmation-box"><Icon>mark_email_read</Icon><div><b>Письмо отправлено на {confirmationEmail}</b><span>Проверьте папки «Спам» и «Промоакции».</span><button type="button" disabled={loading || resendCooldown > 0} onClick={() => void resend()}>{resendCooldown > 0 ? `Отправить ещё раз через ${resendCooldown} сек.` : 'Отправить письмо ещё раз'}</button></div></div>}
+      {confirmationEmail && mode === 'signup' && <div className="confirmation-box"><Icon name="mark_email_read" /><div><b>Письмо отправлено на {confirmationEmail}</b><span>Проверьте папки «Спам» и «Промоакции».</span><button type="button" disabled={loading || resendCooldown > 0} onClick={() => void resend()}>{resendCooldown > 0 ? `Отправить ещё раз через ${resendCooldown} сек.` : 'Отправить письмо ещё раз'}</button></div></div>}
       <button className="primary wide" disabled={loading}>{loading ? 'Подождите…' : mode === 'login' ? 'Войти' : 'Зарегистрироваться'}</button>
       <button type="button" className="text-btn" onClick={() => { setMode(mode === 'login' ? 'signup' : 'login'); setConfirmationEmail(''); setError('') }}>{mode === 'login' ? 'Нет аккаунта? Создать' : 'Уже есть аккаунт? Войти'}</button>
     </form>}
@@ -414,14 +411,14 @@ export function ModerationPage({ solutions, books, onModerate, onDelete, onOpenL
       <h3>{bookName(item.book_key)}</h3>
       <p><b>{item.task}</b> · {item.provider}</p>
       {item.note && <small>{item.note}</small>}
-      {item.status === 'rejected' && item.rejection_reason && <div className="rejection-reason"><Icon>report</Icon><span><b>Причина:</b> {item.rejection_reason}</span></div>}
+      {item.status === 'rejected' && item.rejection_reason && <div className="rejection-reason"><Icon name="report" /><span><b>Причина:</b> {item.rejection_reason}</span></div>}
     </div>
     <div className="moderation-actions">
-      <button className="ghost" onClick={() => onOpenLink(item.url)}><Icon>open_in_new</Icon>Проверить ссылку</button>
-      <button className="delete-link-btn" title="Удалить ссылку" aria-label={`Удалить ссылку ${item.task}`} disabled={busy === item.id} onClick={() => onDelete(item.id)}><Icon>delete</Icon>Удалить</button>
+      <button className="ghost" onClick={() => onOpenLink(item.url)}><Icon name="open_in_new" />Проверить ссылку</button>
+      <button className="delete-link-btn" title="Удалить ссылку" aria-label={`Удалить ссылку ${item.task}`} disabled={busy === item.id} onClick={() => onDelete(item.id)}><Icon name="delete" />Удалить</button>
       {!history && <>
-        <button className="approve-btn" disabled={busy === item.id} onClick={() => void moderate(item.id, 'approved')}><Icon>check</Icon>Одобрить</button>
-        <button className="reject-btn" disabled={busy === item.id} onClick={() => { setRejecting(item.id); setReason(''); setError('') }}><Icon>close</Icon>Отклонить</button>
+        <button className="approve-btn" disabled={busy === item.id} onClick={() => void moderate(item.id, 'approved')}><Icon name="check" />Одобрить</button>
+        <button className="reject-btn" disabled={busy === item.id} onClick={() => { setRejecting(item.id); setReason(''); setError('') }}><Icon name="close" />Отклонить</button>
       </>}
     </div>
     {rejecting === item.id && <div className="reject-box"><label><span>Причина отклонения</span><textarea autoFocus maxLength={500} value={reason} onChange={(event) => setReason(event.target.value)} placeholder="Например: ссылка ведёт не на тот учебник" /></label><div><button className="ghost" onClick={() => setRejecting(null)}>Отмена</button><button className="reject-btn" onClick={() => void moderate(item.id, 'rejected')}>Отклонить с причиной</button></div>{error && <p className="form-error">{error}</p>}</div>}
@@ -435,7 +432,7 @@ export function ModerationPage({ solutions, books, onModerate, onDelete, onOpenL
 
 export function ProfilePage({ user, favorites, solutions, submitted, onAuth, onDelete }: { user: User | null; favorites: number; solutions: number; submitted: SolutionLink[]; onAuth: () => void; onDelete: (id: string) => void }) {
   const name = user?.user_metadata?.full_name || 'Гостевой профиль'
-  return <section className="profile-page"><div className="profile-banner"><UserAvatar user={user} className="profile-avatar" /><div><span className="eyebrow">Мой профиль</span><h1>{name}</h1><p>{user?.email || 'Работаете локально на этом компьютере'}</p></div><button className="soft-btn" onClick={onAuth}><Icon>{user ? 'manage_accounts' : 'login'}</Icon>{user ? 'Управление' : 'Войти'}</button></div><div className="stat-grid"><div><Icon>bookmark</Icon><b>{favorites}</b><span>В избранном</span></div><div><Icon>add_link</Icon><b>{solutions}</b><span>Отправлено ссылок</span></div><div><Icon>cloud_sync</Icon><b>{user ? 'On' : 'Off'}</b><span>Синхронизация</span></div></div>{user && submitted.length > 0 && <div className="submitted-links"><div className="history-heading"><h2>Мои ссылки</h2><span>{submitted.length}</span></div>{submitted.map((item) => <article key={item.id}><ProviderLogo provider={item.provider} url={item.url} /><span className={`status-badge ${item.status || 'pending'}`}>{item.status === 'approved' ? 'Одобрено' : item.status === 'rejected' ? 'Отклонено' : 'На проверке'}</span><div className="submitted-link-copy"><b>{item.task} · {item.provider}</b>{item.status === 'rejected' && item.rejection_reason && <small>Причина: {item.rejection_reason}</small>}</div><button className="delete-link-btn compact" title="Удалить ссылку" aria-label={`Удалить ссылку ${item.task}`} onClick={() => onDelete(item.id)}><Icon>delete</Icon></button></article>)}</div>}</section>
+  return <section className="profile-page"><div className="profile-banner"><UserAvatar user={user} className="profile-avatar" /><div><span className="eyebrow">Мой профиль</span><h1>{name}</h1><p>{user?.email || 'Работаете локально на этом компьютере'}</p></div><button className="soft-btn" onClick={onAuth}><Icon name={user ? 'manage_accounts' : 'login'} />{user ? 'Управление' : 'Войти'}</button></div><div className="stat-grid"><div><Icon name="bookmark" /><b>{favorites}</b><span>В избранном</span></div><div><Icon name="add_link" /><b>{solutions}</b><span>Отправлено ссылок</span></div><div><Icon name="cloud_sync" /><b>{user ? 'On' : 'Off'}</b><span>Синхронизация</span></div></div>{user && submitted.length > 0 && <div className="submitted-links"><div className="history-heading"><h2>Мои ссылки</h2><span>{submitted.length}</span></div>{submitted.map((item) => <article key={item.id}><ProviderLogo provider={item.provider} url={item.url} /><span className={`status-badge ${item.status || 'pending'}`}>{item.status === 'approved' ? 'Одобрено' : item.status === 'rejected' ? 'Отклонено' : 'На проверке'}</span><div className="submitted-link-copy"><b>{item.task} · {item.provider}</b>{item.status === 'rejected' && item.rejection_reason && <small>Причина: {item.rejection_reason}</small>}</div><button className="delete-link-btn compact" title="Удалить ссылку" aria-label={`Удалить ссылку ${item.task}`} onClick={() => onDelete(item.id)}><Icon name="delete" /></button></article>)}</div>}</section>
 }
 
 export function UpdateControl() {
@@ -461,7 +458,7 @@ export function UpdateControl() {
         : state.status === 'not-available' ? `Версия ${state.currentVersion} актуальна`
           : state.status === 'error' ? 'Повторить проверку'
             : `Версия ${state.currentVersion}`
-  const icon = state.status === 'downloaded' ? 'restart_alt' : state.status === 'available' ? 'download' : state.status === 'not-available' ? 'check_circle' : 'system_update'
+  const icon = busy ? 'progress_activity' : state.status === 'downloaded' ? 'restart_alt' : state.status === 'available' ? 'download' : state.status === 'not-available' ? 'check_circle' : 'system_update'
 
   const activate = () => {
     if (isNativeAndroid) {
@@ -471,12 +468,12 @@ export function UpdateControl() {
     else void window.desktop?.checkForUpdates()
   }
 
-  return <button className={`update-control ${state.status}`} type="button" disabled={busy} title={state.message || 'Проверить обновления'} onClick={activate}><Icon>{icon}</Icon>{label}</button>
+  return <button className={`update-control ${state.status}`} type="button" disabled={busy} title={state.message || 'Проверить обновления'} onClick={activate}><Icon name={icon} />{label}</button>
 }
 
 export function Toast({ message, onDone }: { message: string; onDone: () => void }) {
   useEffect(() => { const timer = setTimeout(onDone, 3200); return () => clearTimeout(timer) }, [onDone])
-  return <div className="toast"><Icon>check_circle</Icon>{message}</div>
+  return <div className="toast"><Icon name="check_circle" />{message}</div>
 }
 
 export function CollectionModal({ collections, book, onCreate, onAdd, onClose }: {
@@ -491,11 +488,11 @@ export function CollectionModal({ collections, book, onCreate, onAdd, onClose }:
     <div className="collection-modal-body">
       {book && collections.length > 0 && <div className="collection-choices">{collections.map((collection) => {
         const added = collection.bookIds.includes(book.id)
-        return <button key={collection.id} disabled={added} onClick={() => { onAdd(collection.id, book.id); onClose() }}><span><Icon>folder</Icon></span><span><b>{collection.name}</b><small>{added ? 'Уже добавлено' : `${collection.bookIds.length} разделов`}</small></span><Icon>{added ? 'check' : 'add'}</Icon></button>
+        return <button key={collection.id} disabled={added} onClick={() => { onAdd(collection.id, book.id); onClose() }}><span><Icon name="folder" /></span><span><b>{collection.name}</b><small>{added ? 'Уже добавлено' : `${collection.bookIds.length} разделов`}</small></span><Icon name={added ? 'check' : 'add'} /></button>
       })}</div>}
       <form className="new-collection" onSubmit={(event) => { event.preventDefault(); if (!name.trim()) return; onCreate(name.trim(), book?.id); onClose() }}>
         <label><span>{collections.length ? 'Или создайте новую' : 'Название подборки'}</span><input autoFocus value={name} onChange={(event) => setName(event.target.value)} maxLength={60} placeholder="Например, Мой 7 класс" /></label>
-        <button className="primary" disabled={!name.trim()}><Icon>create_new_folder</Icon>Создать</button>
+        <button className="primary" disabled={!name.trim()}><Icon name="create_new_folder" />Создать</button>
       </form>
     </div>
   </Modal>
@@ -516,10 +513,10 @@ export function CollectionsPage({ collections, activeId, books, favorites, sourc
   const active = collections.find((item) => item.id === activeId)
   if (active) {
     const collectionBooks = books.filter((book) => active.bookIds.includes(book.id))
-    return <section className="collections-page"><button className="back-link" onClick={() => onActive(null)}><Icon>arrow_back</Icon>Все подборки</button><BookGrid books={collectionBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={onFavorite} onOpen={onOpen} title={active.name} /></section>
+    return <section className="collections-page"><button className="back-link" onClick={() => onActive(null)}><Icon name="arrow_back" />Все подборки</button><BookGrid books={collectionBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={onFavorite} onOpen={onOpen} title={active.name} /></section>
   }
-  return <section className="collections-page"><div className="collection-heading"><div><span className="eyebrow">Личная библиотека</span><h1>Мои подборки</h1><p>Создавайте свои наборы учебников. После входа они синхронизируются между устройствами.</p></div><button className="primary" onClick={onCreate}><Icon>create_new_folder</Icon>Новая подборка</button></div>
-    {collections.length ? <div className="collection-grid">{collections.map((collection) => <article key={collection.id} onClick={() => onActive(collection.id)}><span className="collection-icon"><Icon>folder_special</Icon></span><div><h3>{collection.name}</h3><p>{collection.bookIds.length} разделов</p></div><button title="Удалить" onClick={(event) => { event.stopPropagation(); onDelete(collection.id) }}><Icon>delete</Icon></button></article>)}</div> : <EmptyState title="Подборок пока нет" text="Создайте первую подборку и добавляйте в неё нужные разделы из каталога." />}
+  return <section className="collections-page"><div className="collection-heading"><div><span className="eyebrow">Личная библиотека</span><h1>Мои подборки</h1><p>Создавайте свои наборы учебников. После входа они синхронизируются между устройствами.</p></div><button className="primary" onClick={onCreate}><Icon name="create_new_folder" />Новая подборка</button></div>
+    {collections.length ? <div className="collection-grid">{collections.map((collection) => <article key={collection.id} onClick={() => onActive(collection.id)}><span className="collection-icon"><Icon name="folder_special" /></span><div><h3>{collection.name}</h3><p>{collection.bookIds.length} разделов</p></div><button title="Удалить" onClick={(event) => { event.stopPropagation(); onDelete(collection.id) }}><Icon name="delete" /></button></article>)}</div> : <EmptyState title="Подборок пока нет" text="Создайте первую подборку и добавляйте в неё нужные разделы из каталога." />}
   </section>
 }
 
@@ -562,12 +559,12 @@ export function SourceBrowser({ url, onClose, onExternal }: { url: string; onClo
   }, [url])
   return <div className="source-browser">
     <div className="browser-toolbar">
-      <button onClick={() => webviewRef.current?.goBack()}><Icon>arrow_back</Icon></button>
-      <button onClick={() => webviewRef.current?.goForward()}><Icon>arrow_forward</Icon></button>
-      <button onClick={() => webviewRef.current?.reload()}><Icon>refresh</Icon></button>
-      <div className={`browser-address ${loading ? 'loading' : ''}`}><Icon>{loading ? 'progress_activity' : 'lock'}</Icon><span>{currentUrl}</span></div>
-      <button title="Открыть во внешнем браузере" onClick={() => onExternal(currentUrl)}><Icon>open_in_new</Icon></button>
-      <button title="Закрыть" onClick={onClose}><Icon>close</Icon></button>
+      <button aria-label="Назад" onClick={() => webviewRef.current?.goBack()}><Icon name="arrow_back" /></button>
+      <button aria-label="Вперёд" onClick={() => webviewRef.current?.goForward()}><Icon name="arrow_forward" /></button>
+      <button aria-label="Обновить страницу" onClick={() => webviewRef.current?.reload()}><Icon name="refresh" /></button>
+      <div className={`browser-address ${loading ? 'loading' : ''}`}><Icon name={loading ? 'progress_activity' : 'lock'} /><span>{currentUrl}</span></div>
+      <button title="Открыть во внешнем браузере" onClick={() => onExternal(currentUrl)}><Icon name="open_in_new" /></button>
+      <button title="Закрыть" onClick={onClose}><Icon name="close" /></button>
     </div>
     <Webview ref={webviewRef} src={url} className="source-webview" partition="persist:resharium-sources" webpreferences="contextIsolation=yes,nodeIntegration=no,sandbox=yes" />
   </div>

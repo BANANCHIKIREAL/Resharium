@@ -1,7 +1,8 @@
 import type { Book, SolutionLink, Subject } from './types'
 import catalog from './catalog.generated.json'
+import type { IconName } from './icons'
 
-export const subjects: Array<{ name: Subject; icon: string; color: string }> = [
+export const subjects: Array<{ name: Subject; icon: IconName; color: string }> = [
   { name: 'Математика', icon: 'calculate', color: '#9c78ff' },
   { name: 'Русский язык', icon: 'spellcheck', color: '#ff6d9e' },
   { name: 'Русская литература', icon: 'import_contacts', color: '#db82ff' },
