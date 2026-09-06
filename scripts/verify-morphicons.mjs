@@ -53,7 +53,7 @@ try {
   await page.waitForTimeout(900)
   assert.notEqual(await grade.locator('path').getAttribute('d'), closed)
   await grade.click()
-  await page.waitForTimeout(900)
+  await page.waitForFunction(expected => document.querySelector('.grade-trigger path')?.getAttribute('d') === expected, closed, { timeout: 3000 })
   assert.equal(await grade.locator('path').getAttribute('d'), closed)
   await page.screenshot({ path: 'screenshots/morphicons-desktop.png' })
 

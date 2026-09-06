@@ -15,8 +15,10 @@ function bookCoverStyle(book: Book) {
 }
 
 function BookCoverContent({ book, descriptive = false }: { book: Book; descriptive?: boolean }) {
-  return book.coverUrl
-    ? <img src={book.coverUrl} alt={descriptive ? `Обложка: ${book.title}` : ''} />
+  const [failed, setFailed] = useState(false)
+  useEffect(() => setFailed(false), [book.coverUrl])
+  return book.coverUrl && !failed
+    ? <img src={book.coverUrl} alt={descriptive ? `Обложка: ${book.title}` : ''} onError={() => setFailed(true)} />
     : <><span className="cover-grade">{book.grade}</span><Icon name="auto_stories" /><small>{book.grade} класс</small><b>{book.title}</b></>
 }
 
@@ -194,7 +196,7 @@ export function BookCard({ book, favorite, sourceCount, onFavorite, onOpen }: {
       : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 1, height: 1 })
   }
   return (
-    <article className="book-card" role="button" tabIndex={0} aria-label={`Открыть ${book.title}, ${book.grade} класс`} onClick={open} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open() } }}>
+    <article className="book-card" data-book-id={book.id} role="button" tabIndex={0} aria-label={`Открыть ${book.title}, ${book.grade} класс`} onClick={open} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open() } }}>
       <button className={`bookmark ${favorite ? 'saved' : ''}`} aria-label={favorite ? 'Убрать из избранного' : 'В избранное'} aria-pressed={favorite} onClick={(event) => { event.stopPropagation(); onFavorite() }}>
         <Icon filled={favorite} name="bookmark" />
       </button>

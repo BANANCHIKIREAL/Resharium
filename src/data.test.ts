@@ -26,6 +26,13 @@ describe('verified provider availability', () => {
     expect(section(7, 'Химия').sourceUrl).toMatch(/^https:\/\/resheba\.top\//)
   })
 
+  it('replaces verified blurred and unavailable covers with generated covers', () => {
+    expect(books.find((item) => item.id === 'resheba-460d25eaefa15b39')?.coverUrl).toBeUndefined()
+    expect(books.find((item) => item.id === 'resheba-3264524c9030b0b3')?.coverUrl).toBeUndefined()
+    expect(books.find((item) => item.id === 'resheba-24f0a307c8866a43')?.coverUrl).toBeUndefined()
+    expect(books.find((item) => item.id === 'resheba-1c15ec57ae4cd5d8')?.coverUrl).toBe('https://resheba.top/_pu/0/57330604.jpg')
+  })
+
   it('has a real favicon for every automatic provider', () => {
     for (const item of providerSearchesFor(section(7, 'Химия'))) {
       expect(providerIconFor(item.provider)).toMatch(/assets\/providers\/.+\.png$/)

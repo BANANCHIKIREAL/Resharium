@@ -46,6 +46,49 @@ const palettes = [
   ['#4f5b98', '#9ba7ed'], ['#8d4b73', '#e395c3'],
 ]
 
+// These Resheba files were verified as blurred placeholders (or unavailable),
+// so the app renders its crisp generated cover instead.
+const unusableCoverBookIds = new Set([
+  'resheba-d566d34cd9a7b840',
+  'resheba-34022205d4b63f2d',
+  'resheba-1c0dec8aeea72323',
+  'resheba-c7f7ec4ebd889036',
+  'resheba-26dff861921400c8',
+  'resheba-e9fadc61450eaacc',
+  'resheba-02d4016e4d8cbec7',
+  'resheba-0697e85613b507b3',
+  'resheba-db1ce42c43f60d68',
+  'resheba-effddf27b5680918',
+  'resheba-42057df58b92d34f',
+  'resheba-cd43807d98931590',
+  'resheba-295aabe8162f4788',
+  'resheba-e3fd891d35dfc20d',
+  'resheba-9cad232eaaa89c51',
+  'resheba-3264524c9030b0b3',
+  'resheba-2343d87a28db1a48',
+  'resheba-298059b00a13d387',
+  'resheba-758c9082d39201ed',
+  'resheba-a2edcf7d4dce3500',
+  'resheba-eb5e29a6c1473998',
+  'resheba-1d1d4d34d011cf91',
+  'resheba-c1457010646256c0',
+  'resheba-303990404c435976',
+  'resheba-ae7181fde00330bc',
+  'resheba-b0f21360f5e9678b',
+  'resheba-ebd5970c39282c54',
+  'resheba-393ea97691d65399',
+  'resheba-1c6589bafe3b5eae',
+  'resheba-0c5b29d8936cfb33',
+  'resheba-99dcc8c7a03cc5e0',
+  'resheba-215d6731c7c5f06e',
+  'resheba-19d88a6b74748927',
+  'resheba-d5f4e32751cc8647',
+  'resheba-27240dc3d45895b1',
+  'resheba-460d25eaefa15b39',
+  'resheba-a5531b755fce0bb8',
+  'resheba-24f0a307c8866a43',
+])
+
 type CatalogBook = Omit<Book, 'color' | 'accent'>
 
 export function decorateBook(book: CatalogBook, index: number): Book {
@@ -53,6 +96,7 @@ export function decorateBook(book: CatalogBook, index: number): Book {
   const palette = palettes[(Math.max(subjectIndex, 0) + book.grade + index) % palettes.length]
   return {
     ...book,
+    coverUrl: unusableCoverBookIds.has(book.id) ? undefined : book.coverUrl,
     subject: book.subject as Subject,
     color: palette[0],
     accent: palette[1],
