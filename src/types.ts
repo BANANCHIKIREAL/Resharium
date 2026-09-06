@@ -15,6 +15,13 @@ export interface Book {
   popular?: boolean
 }
 
+export interface BookOpenOrigin {
+  left: number
+  top: number
+  width: number
+  height: number
+}
+
 export interface SolutionLink {
   id: string
   book_key: string

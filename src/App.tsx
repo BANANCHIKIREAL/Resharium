@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js'
 import { books as bundledBooks, decorateBook, demoSolutions, providerSearchesFor } from './data'
-import type { Book, BookCollection, SolutionLink, View } from './types'
+import type { Book, BookCollection, BookOpenOrigin, SolutionLink, View } from './types'
 import { createSupabase, getStoredSettings } from './lib/supabase'
 import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, ProfilePage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
 import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage } from './mobile'
@@ -28,6 +28,7 @@ export default function App() {
   const [subject, setSubject] = useState('')
   const [grade, setGrade] = useState(0)
   const [selectedBook, setSelectedBook] = useState<Book | null>(null)
+  const [bookOpenOrigin, setBookOpenOrigin] = useState<BookOpenOrigin | null>(null)
   const [favorites, setFavorites] = useState<string[]>(() => readJson(FAVORITES_KEY, []))
   const [collections, setCollections] = useState<BookCollection[]>(() => readJson(COLLECTIONS_KEY, []))
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
@@ -206,7 +207,7 @@ export default function App() {
         event.preventDefault()
         document.querySelector<HTMLInputElement>('.global-search input')?.focus()
       }
-      if (event.key === 'Escape') { setSelectedBook(null); setShowAdd(false); setShowAuth(false); setShowCollection(false); setBrowserUrl('') }
+      if (event.key === 'Escape') { setSelectedBook(null); setBookOpenOrigin(null); setShowAdd(false); setShowAuth(false); setShowCollection(false); setBrowserUrl('') }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -394,6 +395,16 @@ export default function App() {
     else window.open(url, '_blank', 'noopener,noreferrer')
   }
 
+  const openBook = useCallback((book: Book, origin: BookOpenOrigin) => {
+    setBookOpenOrigin(origin)
+    setSelectedBook(book)
+  }, [])
+
+  const closeBook = useCallback(() => {
+    setSelectedBook(null)
+    setBookOpenOrigin(null)
+  }, [])
+
   async function openExternal(url: string) {
     if (!safeHttpUrl(url)) return
     if (isNativeAndroid) await openNativePage(url)
@@ -405,22 +416,23 @@ export default function App() {
   const visibleBooks = view === 'home' && !query && !subject && !grade ? filteredBooks.filter((book) => book.popular) : filteredBooks
 
   return <div className="app-shell">
+    <div className="ambient-bg" aria-hidden="true"><span className="ambient-orb orb-violet" /><span className="ambient-orb orb-cyan" /><span className="ambient-orb orb-rose" /><span className="ambient-grid" /></div>
     <Sidebar view={view} onView={setView} onAdd={() => setShowAdd(true)} user={user} isAdmin={isAdmin} />
     <main className="main-area">
       <Topbar query={query} setQuery={setQuery} onAuth={() => setShowAuth(true)} />
       <div className="page" ref={searchRef as never}>
-        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={setSelectedBook} /> : <>
+        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
           {view === 'home' && !query && !subject && !grade && <Hero onCatalog={() => setView('catalog')} />}
           <section className="filter-section">
             <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><GradePicker grade={grade} onSelect={setGrade} /></div>
             <SubjectRow active={subject} onSelect={setSubject} />
           </section>
-          <BookGrid books={visibleBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={toggleFavorite} onOpen={setSelectedBook} title={pageTitle} />
+          <BookGrid books={visibleBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={toggleFavorite} onOpen={openBook} title={pageTitle} />
         </>}
         <footer className="app-footer"><span>Решариум · каталог образовательных ссылок</span><UpdateControl /></footer>
       </div>
     </main>
-    {selectedBook && <BookDrawer book={selectedBook} solutions={publicSolutions.filter((item) => item.book_key === selectedBook.id)} onClose={() => setSelectedBook(null)} onAdd={() => setShowAdd(true)} onCollect={() => { setCollectionBook(selectedBook); setShowCollection(true) }} onOpenLink={openLink} />}
+    {selectedBook && <BookDrawer book={selectedBook} origin={bookOpenOrigin} solutions={publicSolutions.filter((item) => item.book_key === selectedBook.id)} onClose={closeBook} onAdd={() => setShowAdd(true)} onCollect={() => { setCollectionBook(selectedBook); setShowCollection(true) }} onOpenLink={openLink} />}
     {showAdd && <AddSolutionModal books={books} initialBook={selectedBook} onClose={() => setShowAdd(false)} onSubmit={addSolution} requireAuth={!user} />}
     {showAuth && <AuthModal connected={Boolean(client)} googleEnabled={googleEnabled} user={user} onGoogle={googleLogin} onEmail={emailAuth} onResend={resendConfirmation} onSignOut={() => client?.auth.signOut()} onClose={() => setShowAuth(false)} />}
     {showCollection && <CollectionModal collections={collections} book={collectionBook} onCreate={createCollection} onAdd={addToCollection} onClose={() => setShowCollection(false)} />}

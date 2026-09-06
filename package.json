@@ -1,6 +1,6 @@
 {
   "name": "resharium",
-  "version": "1.3.2",
+  "version": "1.4.0",
   "private": true,
   "type": "module",
   "description": "Современный каталог ссылок на решения школьных заданий",
@@ -24,6 +24,7 @@
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
     "android:apk:release": "npm run android:sync && cd android && gradlew.bat assembleRelease",
     "verify:mobile": "node scripts/verify-mobile.mjs",
+    "verify:visual": "node scripts/verify-visual-refresh.mjs",
     "preview": "vite preview",
     "test": "vitest run"
   },

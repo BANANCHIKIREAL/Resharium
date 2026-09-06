@@ -1,6 +1,6 @@
-import { useEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
-import type { Book, BookCollection, SolutionLink, UpdateState, View } from './types'
+import type { Book, BookCollection, BookOpenOrigin, SolutionLink, UpdateState, View } from './types'
 import { providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor, subjects } from './data'
 import { profileAvatarUrl } from './avatar'
 import { Icon, type IconName } from './icons'
@@ -12,6 +12,12 @@ function bookCoverStyle(book: Book) {
     '--book-accent': book.accent,
     '--book-glow': `${book.color}66`,
   } as React.CSSProperties
+}
+
+function BookCoverContent({ book, descriptive = false }: { book: Book; descriptive?: boolean }) {
+  return book.coverUrl
+    ? <img src={book.coverUrl} alt={descriptive ? `Обложка: ${book.title}` : ''} />
+    : <><span className="cover-grade">{book.grade}</span><Icon name="auto_stories" /><small>{book.grade} класс</small><b>{book.title}</b></>
 }
 
 function ProviderLogo({ provider, url }: { provider: string; url: string }) {
@@ -178,15 +184,22 @@ export function BookCard({ book, favorite, sourceCount, onFavorite, onOpen }: {
   favorite: boolean
   sourceCount: number
   onFavorite: () => void
-  onOpen: () => void
+  onOpen: (origin: BookOpenOrigin) => void
 }) {
+  const coverRef = useRef<HTMLDivElement | null>(null)
+  const open = () => {
+    const bounds = coverRef.current?.getBoundingClientRect()
+    onOpen(bounds
+      ? { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }
+      : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 1, height: 1 })
+  }
   return (
-    <article className="book-card" onClick={onOpen}>
+    <article className="book-card" role="button" tabIndex={0} aria-label={`Открыть ${book.title}, ${book.grade} класс`} onClick={open} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); open() } }}>
       <button className={`bookmark ${favorite ? 'saved' : ''}`} aria-label={favorite ? 'Убрать из избранного' : 'В избранное'} aria-pressed={favorite} onClick={(event) => { event.stopPropagation(); onFavorite() }}>
         <Icon filled={favorite} name="bookmark" />
       </button>
-      <div className="book-cover" style={bookCoverStyle(book)}>
-        {book.coverUrl ? <img src={book.coverUrl} alt="" /> : <><span className="cover-grade">{book.grade}</span><Icon name="auto_stories" /><small>{book.grade} класс</small><b>{book.title}</b></>}
+      <div className="book-cover" ref={coverRef} style={bookCoverStyle(book)}>
+        <BookCoverContent book={book} />
       </div>
       <div className="book-info">
         <span className="grade-pill">{book.grade} класс</span>
@@ -203,13 +216,13 @@ export function BookGrid({ books, favorites, sourceCounts, onFavorite, onOpen, t
   favorites: string[]
   sourceCounts: Record<string, number>
   onFavorite: (id: string) => void
-  onOpen: (book: Book) => void
+  onOpen: (book: Book, origin: BookOpenOrigin) => void
   title: string
 }) {
   return (
     <section className="books-section">
       <div className="section-heading"><div><span className="eyebrow">Библиотека</span><h2>{title}</h2></div><span className="result-count">{books.length} разделов</span></div>
-      {books.length ? <div className="book-grid">{books.map((book) => <BookCard key={book.id} book={book} favorite={favorites.includes(book.id)} sourceCount={sourceCounts[book.id] || 0} onFavorite={() => onFavorite(book.id)} onOpen={() => onOpen(book)} />)}</div> : <EmptyState title="Здесь пока пусто" text="Измените фильтр или добавьте учебник в избранное." />}
+      {books.length ? <div className="book-grid">{books.map((book) => <BookCard key={book.id} book={book} favorite={favorites.includes(book.id)} sourceCount={sourceCounts[book.id] || 0} onFavorite={() => onFavorite(book.id)} onOpen={(origin) => onOpen(book, origin)} />)}</div> : <EmptyState title="Здесь пока пусто" text="Измените фильтр или добавьте учебник в избранное." />}
     </section>
   )
 }
@@ -218,8 +231,9 @@ export function EmptyState({ title, text }: { title: string; text: string }) {
   return <div className="empty"><span><Icon name="search_off" /></span><h3>{title}</h3><p>{text}</p></div>
 }
 
-export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenLink }: {
+export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect, onOpenLink }: {
   book: Book
+  origin?: BookOpenOrigin | null
   solutions: SolutionLink[]
   onClose: () => void
   onAdd: () => void
@@ -227,6 +241,32 @@ export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenL
   onOpenLink: (url: string) => void
 }) {
   const [taskSearch, setTaskSearch] = useState('')
+  const coverRef = useRef<HTMLDivElement | null>(null)
+  const [morph, setMorph] = useState<({ left: number; top: number; width: number; height: number; x: number; y: number; scaleX: number; scaleY: number }) | null>(null)
+  const [morphDone, setMorphDone] = useState(!origin)
+
+  useLayoutEffect(() => {
+    const target = coverRef.current
+    if (!origin || !target || window.matchMedia('(prefers-reduced-motion: reduce)').matches) {
+      setMorph(null)
+      setMorphDone(true)
+      return
+    }
+    const destination = target.getBoundingClientRect()
+    setMorph({
+      left: destination.left,
+      top: destination.top,
+      width: destination.width,
+      height: destination.height,
+      x: origin.left - destination.left,
+      y: origin.top - destination.top,
+      scaleX: origin.width / destination.width,
+      scaleY: origin.height / destination.height,
+    })
+    setMorphDone(false)
+    const timer = window.setTimeout(() => setMorphDone(true), 470)
+    return () => window.clearTimeout(timer)
+  }, [book.id, origin])
   const filtered = solutions.filter((item) => item.task.toLowerCase().includes(taskSearch.toLowerCase()))
   const availableProviders = providerSearchesFor(book).filter((provider) => provider.provider !== book.sourceName)
   const sourceUrl = (domain: string) => taskSearch.trim()
@@ -234,14 +274,15 @@ export function BookDrawer({ book, solutions, onClose, onAdd, onCollect, onOpenL
     : `https://${domain}/`
   return (
     <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
-      <aside className="drawer">
+      <aside className={`drawer${origin ? ' has-book-morph' : ''}`}>
         <div className="drawer-head">
           <button className="icon-btn" aria-label="Закрыть учебник" onClick={onClose}><Icon name="close" /></button>
           <span>Карточка учебника</span>
           <div className="drawer-actions"><button className="soft-btn" onClick={onCollect}><Icon name="folder_special" /> В подборку</button><button className="soft-btn" onClick={onAdd}><Icon name="add_link" /> Ссылка</button></div>
         </div>
         <div className="drawer-book">
-          <div className="book-cover large" style={bookCoverStyle(book)}>{book.coverUrl ? <img src={book.coverUrl} alt={`Обложка: ${book.title}`} /> : <><span className="cover-grade">{book.grade}</span><Icon name="auto_stories" /><small>{book.grade} класс</small><b>{book.title}</b></>}</div>
+          <div className={`book-cover large morph-target${morphDone ? ' ready' : ''}`} ref={coverRef} style={bookCoverStyle(book)}><BookCoverContent book={book} descriptive /></div>
+          {morph && !morphDone && <div className="book-cover large book-cover-morph" aria-hidden="true" style={{ ...bookCoverStyle(book), '--morph-left': `${morph.left}px`, '--morph-top': `${morph.top}px`, '--morph-width': `${morph.width}px`, '--morph-height': `${morph.height}px`, '--morph-x': `${morph.x}px`, '--morph-y': `${morph.y}px`, '--morph-scale-x': morph.scaleX, '--morph-scale-y': morph.scaleY } as React.CSSProperties}><BookCoverContent book={book} /></div>}
           <div><span className="grade-pill">{book.grade} класс{book.year ? ` · ${book.year}` : ''}</span><h2>{book.title}</h2><p>{book.author}</p><span className="verified"><Icon name="verified" /> Каталог источников</span></div>
         </div>
         <label className="task-search"><Icon name="search" /><input value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} placeholder="Введите номер задания" /></label>
@@ -508,7 +549,7 @@ export function CollectionsPage({ collections, activeId, books, favorites, sourc
   onCreate: () => void
   onDelete: (id: string) => void
   onFavorite: (id: string) => void
-  onOpen: (book: Book) => void
+  onOpen: (book: Book, origin: BookOpenOrigin) => void
 }) {
   const active = collections.find((item) => item.id === activeId)
   if (active) {
