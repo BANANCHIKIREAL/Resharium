@@ -68,6 +68,7 @@ declare global {
       onAuthCallback: (callback: (url: string) => void) => () => void
       getUpdateState: () => Promise<UpdateState>
       checkForUpdates: () => Promise<UpdateState>
+      downloadUpdate: () => Promise<boolean>
       installUpdate: () => Promise<boolean>
       onUpdateState: (callback: (state: UpdateState) => void) => () => void
     }

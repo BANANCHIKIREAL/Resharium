@@ -507,7 +507,8 @@ export function UpdateControl() {
     if (isNativeAndroid) {
       if (state.status === 'available') void installAndroidUpdate()
       else { setState({ ...state, status: 'checking' }); void checkAndroidUpdate().then(setState) }
-    } else if (state.status === 'downloaded') void window.desktop?.installUpdate()
+    } else if (state.status === 'available') void window.desktop?.downloadUpdate()
+    else if (state.status === 'downloaded') void window.desktop?.installUpdate()
     else void window.desktop?.checkForUpdates()
   }
 

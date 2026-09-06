@@ -56,12 +56,13 @@ function checkForUpdates() {
 function configureUpdater() {
   if (!app.isPackaged) return
 
-  autoUpdater.autoDownload = true
-  autoUpdater.autoInstallOnAppQuit = true
+  // Updates are opt-in: checking must never download or install anything by itself.
+  autoUpdater.autoDownload = false
+  autoUpdater.autoInstallOnAppQuit = false
   autoUpdater.allowPrerelease = false
 
   autoUpdater.on('checking-for-update', () => publishUpdateState({ status: 'checking', message: 'Проверяем обновления…' }))
-  autoUpdater.on('update-available', (info) => publishUpdateState({ status: 'downloading', availableVersion: info.version, progress: 0, message: `Загружается версия ${info.version}` }))
+  autoUpdater.on('update-available', (info) => publishUpdateState({ status: 'available', availableVersion: info.version, progress: 0, message: `Доступна версия ${info.version}` }))
   autoUpdater.on('update-not-available', () => publishUpdateState({ status: 'not-available', availableVersion: undefined, progress: undefined, message: 'Установлена актуальная версия' }))
   autoUpdater.on('download-progress', (progress) => publishUpdateState({ status: 'downloading', progress: Math.round(progress.percent), message: `Загрузка обновления: ${Math.round(progress.percent)}%` }))
   autoUpdater.on('error', (error) => {
@@ -159,6 +160,14 @@ ipcMain.handle('get-pending-auth-url', () => pendingAuthUrl)
 ipcMain.handle('clear-pending-auth-url', () => { pendingAuthUrl = null })
 ipcMain.handle('updater-get-state', () => updateState)
 ipcMain.handle('updater-check', () => checkForUpdates())
+ipcMain.handle('updater-download', () => {
+  if (updateState.status !== 'available') return false
+  publishUpdateState({ status: 'downloading', progress: 0, message: `Загружается версия ${updateState.availableVersion}` })
+  void autoUpdater.downloadUpdate().catch((error) => {
+    publishUpdateState({ status: 'error', progress: undefined, message: error?.message || 'Не удалось загрузить обновление' })
+  })
+  return true
+})
 ipcMain.handle('updater-install', () => {
   if (updateState.status !== 'downloaded') return false
   autoUpdater.quitAndInstall(false, true)

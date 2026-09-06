@@ -6,6 +6,7 @@ contextBridge.exposeInMainWorld('desktop', {
   clearPendingAuthUrl: () => ipcRenderer.invoke('clear-pending-auth-url'),
   getUpdateState: () => ipcRenderer.invoke('updater-get-state'),
   checkForUpdates: () => ipcRenderer.invoke('updater-check'),
+  downloadUpdate: () => ipcRenderer.invoke('updater-download'),
   installUpdate: () => ipcRenderer.invoke('updater-install'),
   onUpdateState: (callback) => {
     const handler = (_event, state) => callback(state)
