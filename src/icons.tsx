@@ -5,7 +5,7 @@ import {
   Check, ChevronDown, ChevronUp, CircleCheck, CircleUserRound, ClipboardCheck, Clock3,
   CloudOff, CloudSync, Code, Dna, DraftingCompass, Download, ExternalLink,
   FlaskConical, Folder, FolderCheck, FolderOpen, FolderPlus, FolderHeart, Globe,
-  Grid2x2, Grid3x3, House, Info, Keyboard, Languages, Landmark, LayoutDashboard,
+  Grid2x2, Grid3x3, History, House, Info, Keyboard, Languages, Landmark, LayoutDashboard,
   LibraryBig, Link, ListChecks, LoaderCircle, LockKeyhole, LogIn, LogOut,
   MailCheck, MessageCircle, Mic, Music, Palette, Pencil, Plus, RefreshCw,
   RotateCcw, Satellite, Save, ScrollText, Search, SearchX, Settings, Shield, ShieldCheck,
@@ -51,6 +51,7 @@ const selectedIcons: Partial<Record<IconName, IconInput>> = {
   apps: Grid2x2,
   shield: ShieldCheck,
   auto_stories: Book,
+  history: History,
 }
 
 export function Icon({ name, filled = false }: { name: IconName; filled?: boolean }) {

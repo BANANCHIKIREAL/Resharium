@@ -8,6 +8,7 @@ const PROTOCOL = 'resharium'
 let mainWindow
 let pendingAuthUrl = null
 let updatePromptOpen = false
+let shortcutCaptureActive = false
 let desktopSettingsPath = ''
 let desktopSettings = { minimizeShortcut: 'CommandOrControl+Shift+M', adBlockEnabled: true }
 let updateState = {
@@ -127,17 +128,24 @@ function minimizeWindow() {
   if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize()
 }
 
+const modifierOnlyShortcuts = new Set(['Control', 'Shift', 'Alt', 'Super'])
+
+function isModifierOnlyShortcut(shortcut) {
+  return modifierOnlyShortcuts.has(shortcut)
+}
+
+function registerGlobalMinimizeShortcut(shortcut) {
+  if (!shortcut || isModifierOnlyShortcut(shortcut)) return true
+  try { return globalShortcut.register(shortcut, minimizeWindow) } catch { return false }
+}
+
 function setMinimizeShortcut(shortcut, persist = true) {
   const next = typeof shortcut === 'string' ? shortcut.trim() : ''
   const previous = desktopSettings.minimizeShortcut
-  if (previous && globalShortcut.isRegistered(previous)) globalShortcut.unregister(previous)
-  if (next) {
-    let registered = false
-    try { registered = globalShortcut.register(next, minimizeWindow) } catch { registered = false }
-    if (!registered) {
-      if (previous) globalShortcut.register(previous, minimizeWindow)
-      return { ok: false, shortcut: previous, error: 'Это сочетание уже занято системой или другой программой' }
-    }
+  if (previous && !isModifierOnlyShortcut(previous) && globalShortcut.isRegistered(previous)) globalShortcut.unregister(previous)
+  if (!registerGlobalMinimizeShortcut(next)) {
+    registerGlobalMinimizeShortcut(previous)
+    return { ok: false, shortcut: previous, error: 'Это сочетание уже занято системой или другой программой' }
   }
   desktopSettings.minimizeShortcut = next
   if (persist) saveDesktopSettings()
@@ -178,6 +186,12 @@ function createWindow() {
   })
 
   mainWindow.setMenuBarVisibility(false)
+
+  mainWindow.webContents.on('before-input-event', (_event, input) => {
+    if (shortcutCaptureActive || input.type !== 'keyUp') return
+    const pressed = input.key === 'Meta' ? 'Super' : input.key
+    if (isModifierOnlyShortcut(desktopSettings.minimizeShortcut) && pressed === desktopSettings.minimizeShortcut) minimizeWindow()
+  })
 
   if (process.env.VITE_DEV_SERVER_URL) {
     mainWindow.loadURL(process.env.VITE_DEV_SERVER_URL)
@@ -232,7 +246,8 @@ ipcMain.handle('adblock-set', (_event, enabled) => {
   return desktopSettings.adBlockEnabled
 })
 ipcMain.handle('shortcut-capture', (_event, active) => {
-  globalShortcut.setSuspended(active === true)
+  shortcutCaptureActive = active === true
+  globalShortcut.setSuspended(shortcutCaptureActive)
 })
 
 app.whenReady().then(() => {

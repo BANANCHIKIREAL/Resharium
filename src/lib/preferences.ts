@@ -33,6 +33,21 @@ const keyNames: Record<string, string> = {
   Insert: 'Insert', Home: 'Home', End: 'End', PageUp: 'PageUp', PageDown: 'PageDown', Tab: 'Tab',
 }
 
+const modifierAccelerators: Record<string, string> = {
+  Control: 'Control',
+  Shift: 'Shift',
+  Alt: 'Alt',
+  Meta: 'Super',
+}
+
+export function modifierKeyToAccelerator(key: string) {
+  return modifierAccelerators[key] || null
+}
+
+export function isModifierOnlyAccelerator(value: string) {
+  return ['Control', 'Shift', 'Alt', 'Super'].includes(value)
+}
+
 export function keyboardEventToAccelerator(event: Pick<KeyboardEvent, 'key' | 'code' | 'ctrlKey' | 'metaKey' | 'altKey' | 'shiftKey'>) {
   if (['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) return null
   let key = keyNames[event.key]
@@ -46,5 +61,7 @@ export function keyboardEventToAccelerator(event: Pick<KeyboardEvent, 'key' | 'c
 }
 
 export function displayAccelerator(value: string) {
+  if (value === 'Control') return 'Ctrl'
+  if (value === 'Super') return 'Win'
   return value.replace('CommandOrControl', 'Ctrl') || 'Не назначено'
 }

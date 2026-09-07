@@ -19,8 +19,8 @@ async function verify(name, viewport) {
         getPendingAuthUrl: async () => null,
         clearPendingAuthUrl: async () => undefined,
         onAuthCallback: () => () => undefined,
-        getUpdateState: async () => ({ status: 'idle', currentVersion: '1.4.5' }),
-        checkForUpdates: async () => ({ status: 'not-available', currentVersion: '1.4.5' }),
+        getUpdateState: async () => ({ status: 'idle', currentVersion: '1.5.0' }),
+        checkForUpdates: async () => ({ status: 'not-available', currentVersion: '1.5.0' }),
         downloadUpdate: async () => false,
         installUpdate: async () => false,
         onUpdateState: () => () => undefined,
@@ -54,11 +54,14 @@ async function verify(name, viewport) {
     throw new Error(`${name}: verified sharp source cover is missing`)
   }
   if (name === 'desktop') {
+    if (await page.locator('.global-search kbd').count()) throw new Error('desktop: obsolete Ctrl K search hint is still visible')
     await page.getByRole('button', { name: 'Настройки', exact: true }).click()
     await page.locator('.shortcut-recorder').waitFor()
     await page.getByRole('button', { name: 'Изменить' }).click()
-    await page.keyboard.press('Control+Alt+M')
-    await page.getByText('Ctrl+Alt+M', { exact: true }).waitFor()
+    await page.keyboard.down('Control')
+    await page.keyboard.up('Control')
+    await page.getByText('Ctrl', { exact: true }).waitFor()
+    await page.getByText('Одиночная клавиша работает, пока окно Решариума активно.', { exact: true }).waitFor()
     await page.screenshot({ path: resolve(screenshots, 'settings-desktop.png'), fullPage: true })
     await page.getByRole('button', { name: 'Главная', exact: true }).click()
     await page.locator('.book-card').first().waitFor()
@@ -91,6 +94,7 @@ async function verify(name, viewport) {
     await page.waitForTimeout(300)
     if ((await page.locator('.recent-card').count()) !== 1) throw new Error('mobile: opened book was not saved once in recent history')
     if ((await page.locator('.sidebar nav button.active').getAttribute('aria-label')) !== 'Недавнее') throw new Error('mobile: recent tab did not become active')
+    if (!(await page.locator('.sidebar nav button.active .ui-icon[data-icon="history"].filled').count())) throw new Error('mobile: recent tab icon has no selected Morphicons state')
     if ((await page.locator('.page').evaluate((element) => element.scrollTop)) !== 0) throw new Error('mobile: recent page did not reset scroll position')
     await page.screenshot({ path: resolve(screenshots, 'recent-mobile.png'), fullPage: true })
     await page.getByRole('button', { name: 'Главная' }).click()

@@ -5,7 +5,7 @@ import { providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconF
 import { profileAvatarUrl } from './avatar'
 import { Icon, type IconName } from './icons'
 import { checkAndroidUpdate, getAndroidUpdateState, installAndroidUpdate, isNativeAndroid } from './mobile'
-import { displayAccelerator, keyboardEventToAccelerator, type AppPreferences, type AppTheme } from './lib/preferences'
+import { displayAccelerator, isModifierOnlyAccelerator, keyboardEventToAccelerator, modifierKeyToAccelerator, type AppPreferences, type AppTheme } from './lib/preferences'
 
 function bookCoverStyle(book: Book) {
   return {
@@ -97,7 +97,6 @@ export function Topbar({ query, setQuery, onAuth, onSettings }: {
       <label className="global-search">
         <Icon name="search" />
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Учебник, автор, предмет или задание..." />
-        <kbd>Ctrl K</kbd>
       </label>
       <button className="icon-btn" aria-label="Настройки" onClick={onSettings} title="Настройки"><Icon name="settings" /></button>
       <button className="icon-btn" aria-label="Аккаунт" onClick={onAuth} title="Аккаунт"><Icon name="account_circle" /></button>
@@ -286,26 +285,50 @@ export function SettingsPage({ preferences, isDesktop, onChange, onShortcut, onS
   const [shortcutError, setShortcutError] = useState('')
   useEffect(() => {
     if (!recording) return
-    const capture = (event: KeyboardEvent) => {
-      event.preventDefault()
-      event.stopPropagation()
-      if (event.key === 'Escape') {
-        setRecording(false)
-        void onShortcutCapture(false)
-        return
-      }
-      const shortcut = keyboardEventToAccelerator(event)
-      if (!shortcut) {
-        if (!['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) setShortcutError('Для букв и цифр добавьте Ctrl, Alt или Shift. Отдельно можно назначить F1–F24.')
-        return
-      }
+    let pendingModifier = ''
+    let committed = false
+    const commitShortcut = (shortcut: string) => {
+      if (committed) return
+      committed = true
+      pendingModifier = ''
       setRecording(false)
       setShortcutError('')
       void onShortcutCapture(false).then(() => onShortcut(shortcut)).then((error) => error && setShortcutError(error))
     }
-    window.addEventListener('keydown', capture, true)
+    const captureKeyDown = (event: KeyboardEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.key === 'Escape') {
+        committed = true
+        setRecording(false)
+        void onShortcutCapture(false)
+        return
+      }
+      const modifier = modifierKeyToAccelerator(event.key)
+      if (modifier) {
+        pendingModifier = modifier
+        setShortcutError(`Отпустите ${displayAccelerator(modifier)}, чтобы назначить только эту клавишу, или нажмите вторую клавишу.`)
+        return
+      }
+      const shortcut = keyboardEventToAccelerator(event)
+      if (!shortcut) {
+        setShortcutError('Для букв и цифр добавьте Ctrl, Alt или Shift. Отдельно можно назначить F1–F24.')
+        return
+      }
+      commitShortcut(shortcut)
+    }
+    const captureKeyUp = (event: KeyboardEvent) => {
+      const modifier = modifierKeyToAccelerator(event.key)
+      if (!modifier || pendingModifier !== modifier || committed) return
+      event.preventDefault()
+      event.stopPropagation()
+      commitShortcut(modifier)
+    }
+    window.addEventListener('keydown', captureKeyDown, true)
+    window.addEventListener('keyup', captureKeyUp, true)
     return () => {
-      window.removeEventListener('keydown', capture, true)
+      window.removeEventListener('keydown', captureKeyDown, true)
+      window.removeEventListener('keyup', captureKeyUp, true)
       void onShortcutCapture(false)
     }
   }, [recording, onShortcut, onShortcutCapture])
@@ -321,7 +344,7 @@ export function SettingsPage({ preferences, isDesktop, onChange, onShortcut, onS
     <div className="settings-groups">
       <section className="settings-card"><div className="settings-card-title"><span><Icon name="palette" /></span><div><h2>Тема оформления</h2><p>Выберите цвет стекла и акцентов интерфейса.</p></div></div><div className="theme-picker">{themeOptions.map((theme) => <button key={theme.id} aria-pressed={preferences.theme === theme.id} className={preferences.theme === theme.id ? 'selected' : ''} onClick={() => onChange({ theme: theme.id })}><span className="theme-preview" style={{ '--theme-a': theme.colors[0], '--theme-b': theme.colors[1] } as React.CSSProperties} /><span>{theme.name}</span>{preferences.theme === theme.id && <Icon name="check_circle" />}</button>)}</div></section>
       <section className="settings-card"><div className="setting-row"><span className="setting-icon"><Icon name="orbit" /></span><div><h2>Анимации</h2><p>Плавные переходы, блики и перелёт обложек.</p></div><button className={`switch${preferences.animationsEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.animationsEnabled} aria-label="Анимации" onClick={() => onChange({ animationsEnabled: !preferences.animationsEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon secure"><Icon name="shield" /></span><div><h2>Блокировка рекламы</h2><p>Фильтрует рекламу и трекеры во встроенном просмотрщике.</p></div><button className={`switch${preferences.adBlockEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.adBlockEnabled} aria-label="Блокировка рекламы" onClick={() => onChange({ adBlockEnabled: !preferences.adBlockEnabled })}><span /></button></div></section>
-      {isDesktop && <section className="settings-card"><div className="settings-card-title"><span><Icon name="keyboard" /></span><div><h2>Быстрое сворачивание</h2><p>Глобальное сочетание работает, даже когда открыто другое окно.</p></div></div><div className={`shortcut-recorder${recording ? ' recording' : ''}`}><div><small>Текущее сочетание</small><kbd>{recording ? 'Нажмите клавиши…' : displayAccelerator(preferences.minimizeShortcut)}</kbd></div><button className="soft-btn" onClick={beginCapture}>{recording ? 'Слушаю…' : 'Изменить'}</button><button className="ghost" onClick={() => void onShortcut('CommandOrControl+Shift+M').then((error) => setShortcutError(error || ''))}>По умолчанию</button></div>{shortcutError && <p className="setting-error">{shortcutError}</p>}</section>}
+      {isDesktop && <section className="settings-card"><div className="settings-card-title"><span><Icon name="keyboard" /></span><div><h2>Быстрое сворачивание</h2><p>{isModifierOnlyAccelerator(preferences.minimizeShortcut) ? 'Одиночная клавиша работает, пока окно Решариума активно.' : 'Сочетание работает глобально, даже когда открыто другое окно.'}</p></div></div><div className={`shortcut-recorder${recording ? ' recording' : ''}`}><div><small>Текущая клавиша</small><kbd>{recording ? 'Нажмите клавиши…' : displayAccelerator(preferences.minimizeShortcut)}</kbd></div><button className="soft-btn" onClick={beginCapture}>{recording ? 'Слушаю…' : 'Изменить'}</button><button className="ghost" onClick={() => void onShortcut('CommandOrControl+Shift+M').then((error) => setShortcutError(error || ''))}>По умолчанию</button></div>{shortcutError && <p className="setting-error">{shortcutError}</p>}</section>}
     </div>
   </section>
 }
