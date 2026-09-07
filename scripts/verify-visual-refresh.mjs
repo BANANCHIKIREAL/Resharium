@@ -10,7 +10,8 @@ const browser = await chromium.launch({ headless: true })
 const errors = []
 
 async function verify(name, viewport) {
-  const page = await browser.newPage({ viewport, deviceScaleFactor: 1 })
+  const page = await browser.newPage({ viewport, deviceScaleFactor: 1, hasTouch: name === 'mobile' })
+  page.setDefaultTimeout(10_000)
   page.on('pageerror', (error) => errors.push(`${name}: ${error.message}`))
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(`${name}: ${message.text()}`)
@@ -32,6 +33,20 @@ async function verify(name, viewport) {
   await page.locator('[data-book-id="resheba-3264524c9030b0b3"]').screenshot({ path: resolve(screenshots, `sharp-workbook-${name}.png`) })
   if (!(await page.locator('[data-book-id="resheba-1c15ec57ae4cd5d8"] .book-cover img').count())) {
     throw new Error(`${name}: verified sharp source cover is missing`)
+  }
+  if (name === 'mobile') {
+    const collectionsButton = page.getByRole('button', { name: 'Мои подборки', exact: true })
+    const tapHighlight = await collectionsButton.evaluate((element) => getComputedStyle(element).webkitTapHighlightColor)
+    if (tapHighlight !== 'rgba(0, 0, 0, 0)') throw new Error(`mobile: tap highlight is ${tapHighlight}`)
+    await collectionsButton.click()
+    await page.locator('.collection-heading').waitFor()
+    await page.waitForTimeout(300)
+    if ((await page.locator('.sidebar nav button.active').getAttribute('aria-label')) !== 'Мои подборки') {
+      throw new Error('mobile: collections tab did not become active')
+    }
+    await page.screenshot({ path: resolve(screenshots, 'liquid-glass-mobile.png'), fullPage: true })
+    await page.getByRole('button', { name: 'Главная' }).click()
+    await page.locator('.book-card').first().waitFor()
   }
   await page.screenshot({ path: resolve(screenshots, `glass-${name}.png`), fullPage: true })
 

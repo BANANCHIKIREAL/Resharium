@@ -68,12 +68,12 @@ export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
       <Brand />
       <nav>
         {nav.map((item) => (
-          <button key={item.id} className={view === item.id ? 'active' : ''} onClick={() => onView(item.id)}>
+          <button key={item.id} aria-label={item.label} className={view === item.id ? 'active' : ''} onClick={() => onView(item.id)}>
             <Icon filled={view === item.id} name={item.icon} /><span>{item.label}</span>
           </button>
         ))}
       </nav>
-      <button className="add-quick" onClick={onAdd}><Icon name="add" /><span>Добавить решение</span></button>
+      <button className="add-quick" aria-label="Добавить решение" onClick={onAdd}><Icon name="add" /><span>Добавить решение</span></button>
       <div className="sidebar-bottom">
         <button onClick={() => onView('profile')} className="mini-profile">
           <UserAvatar user={user} />
