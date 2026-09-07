@@ -8,6 +8,10 @@ contextBridge.exposeInMainWorld('desktop', {
   checkForUpdates: () => ipcRenderer.invoke('updater-check'),
   downloadUpdate: () => ipcRenderer.invoke('updater-download'),
   installUpdate: () => ipcRenderer.invoke('updater-install'),
+  getDesktopSettings: () => ipcRenderer.invoke('desktop-settings-get'),
+  setMinimizeShortcut: (shortcut) => ipcRenderer.invoke('minimize-shortcut-set', shortcut),
+  setAdBlockEnabled: (enabled) => ipcRenderer.invoke('adblock-set', enabled),
+  setShortcutCapture: (active) => ipcRenderer.invoke('shortcut-capture', active),
   onUpdateState: (callback) => {
     const handler = (_event, state) => callback(state)
     ipcRenderer.on('updater-state', handler)

@@ -1,10 +1,11 @@
 import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
-import type { Book, BookCollection, BookOpenOrigin, SolutionLink, UpdateState, View } from './types'
+import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SolutionLink, UpdateState, View } from './types'
 import { providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor, subjects } from './data'
 import { profileAvatarUrl } from './avatar'
 import { Icon, type IconName } from './icons'
 import { checkAndroidUpdate, getAndroidUpdateState, installAndroidUpdate, isNativeAndroid } from './mobile'
+import { displayAccelerator, keyboardEventToAccelerator, type AppPreferences, type AppTheme } from './lib/preferences'
 
 function bookCoverStyle(book: Book) {
   return {
@@ -60,6 +61,7 @@ export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
     { id: 'home' as const, icon: 'space_dashboard', label: 'Главная' },
     { id: 'catalog' as const, icon: 'local_library', label: 'Каталог' },
     { id: 'favorites' as const, icon: 'bookmark', label: 'Избранное' },
+    { id: 'recent' as const, icon: 'history', label: 'Недавнее' },
     { id: 'collections' as const, icon: 'folder_special', label: 'Мои подборки' },
   ]
   if (isAdmin) nav.push({ id: 'moderation', icon: 'fact_check', label: 'Модерация' })
@@ -84,10 +86,11 @@ export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
   )
 }
 
-export function Topbar({ query, setQuery, onAuth }: {
+export function Topbar({ query, setQuery, onAuth, onSettings }: {
   query: string
   setQuery: (value: string) => void
   onAuth: () => void
+  onSettings: () => void
 }) {
   return (
     <header className="topbar">
@@ -96,7 +99,8 @@ export function Topbar({ query, setQuery, onAuth }: {
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Учебник, автор, предмет или задание..." />
         <kbd>Ctrl K</kbd>
       </label>
-      <button className="icon-btn" onClick={onAuth} title="Аккаунт"><Icon name="account_circle" /></button>
+      <button className="icon-btn" aria-label="Настройки" onClick={onSettings} title="Настройки"><Icon name="settings" /></button>
+      <button className="icon-btn" aria-label="Аккаунт" onClick={onAuth} title="Аккаунт"><Icon name="account_circle" /></button>
     </header>
   )
 }
@@ -233,6 +237,95 @@ export function EmptyState({ title, text }: { title: string; text: string }) {
   return <div className="empty"><span><Icon name="search_off" /></span><h3>{title}</h3><p>{text}</p></div>
 }
 
+const recentDateFormat = new Intl.DateTimeFormat('ru-BY', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })
+
+export function RecentPage({ visits, books, onOpenBook, onOpenSolution, onClear }: {
+  visits: RecentVisit[]
+  books: Book[]
+  onOpenBook: (book: Book, origin: BookOpenOrigin) => void
+  onOpenSolution: (visit: RecentVisit) => void
+  onClear: () => void
+}) {
+  const bookById = new Map(books.map((book) => [book.id, book]))
+  const visibleVisits = visits.flatMap((visit) => {
+    const book = bookById.get(visit.bookId)
+    return book ? [{ visit, book }] : []
+  })
+  const openVisit = (visit: RecentVisit, book: Book, card: HTMLElement) => {
+    if (visit.kind === 'solution' && visit.url) return onOpenSolution(visit)
+    const bounds = card.querySelector('.recent-cover')?.getBoundingClientRect()
+    onOpenBook(book, bounds
+      ? { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }
+      : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 1, height: 1 })
+  }
+  return <section className="recent-page">
+    <div className="recent-heading"><div><span className="eyebrow">История</span><h1>Недавнее</h1><p>Последние открытые учебники и страницы решений хранятся на этом устройстве.</p></div>{visibleVisits.length > 0 && <button className="soft-btn danger" onClick={onClear}><Icon name="delete" />Очистить историю</button>}</div>
+    {visibleVisits.length > 0 ? <div className="recent-list">{visibleVisits.map(({ visit, book }) => <article className="recent-card" key={visit.id} role="button" tabIndex={0} aria-label={`Открыть ${visit.task || book.title}`} onClick={(event) => openVisit(visit, book, event.currentTarget)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openVisit(visit, book, event.currentTarget) } }}>
+      <div className="book-cover recent-cover" style={bookCoverStyle(book)}><BookCoverContent book={book} /></div>
+      <div className="recent-copy"><span className={`recent-kind ${visit.kind}`}><Icon name={visit.kind === 'solution' ? 'open_in_new' : 'menu_book'} />{visit.kind === 'solution' ? 'Решение' : 'Учебник'}</span><h3>{visit.task || book.title}</h3><p>{book.subject} · {book.grade} класс</p><small>{visit.provider ? `${visit.provider} · ` : ''}{recentDateFormat.format(new Date(visit.openedAt))}</small></div>
+      <Icon name="arrow_forward" />
+    </article>)}</div> : <EmptyState title="История пока пуста" text="Откройте учебник или страницу решения — она появится здесь." />}
+  </section>
+}
+
+const themeOptions: Array<{ id: AppTheme; name: string; colors: [string, string] }> = [
+  { id: 'violet', name: 'Фиолетовая', colors: ['#9369ff', '#4ed8ff'] },
+  { id: 'ocean', name: 'Океан', colors: ['#26b7db', '#5479ff'] },
+  { id: 'emerald', name: 'Изумруд', colors: ['#39c98d', '#55cddd'] },
+  { id: 'sunset', name: 'Закат', colors: ['#f06e9e', '#ff9b59'] },
+]
+
+export function SettingsPage({ preferences, isDesktop, onChange, onShortcut, onShortcutCapture }: {
+  preferences: AppPreferences
+  isDesktop: boolean
+  onChange: (changes: Partial<AppPreferences>) => void
+  onShortcut: (shortcut: string) => Promise<string | null>
+  onShortcutCapture: (active: boolean) => Promise<void>
+}) {
+  const [recording, setRecording] = useState(false)
+  const [shortcutError, setShortcutError] = useState('')
+  useEffect(() => {
+    if (!recording) return
+    const capture = (event: KeyboardEvent) => {
+      event.preventDefault()
+      event.stopPropagation()
+      if (event.key === 'Escape') {
+        setRecording(false)
+        void onShortcutCapture(false)
+        return
+      }
+      const shortcut = keyboardEventToAccelerator(event)
+      if (!shortcut) {
+        if (!['Control', 'Shift', 'Alt', 'Meta'].includes(event.key)) setShortcutError('Для букв и цифр добавьте Ctrl, Alt или Shift. Отдельно можно назначить F1–F24.')
+        return
+      }
+      setRecording(false)
+      setShortcutError('')
+      void onShortcutCapture(false).then(() => onShortcut(shortcut)).then((error) => error && setShortcutError(error))
+    }
+    window.addEventListener('keydown', capture, true)
+    return () => {
+      window.removeEventListener('keydown', capture, true)
+      void onShortcutCapture(false)
+    }
+  }, [recording, onShortcut, onShortcutCapture])
+
+  const beginCapture = () => {
+    setShortcutError('')
+    setRecording(true)
+    void onShortcutCapture(true)
+  }
+
+  return <section className="settings-page">
+    <div className="settings-heading"><span className="eyebrow">Персонализация</span><h1>Настройки</h1><p>Параметры сохраняются только на этом устройстве.</p></div>
+    <div className="settings-groups">
+      <section className="settings-card"><div className="settings-card-title"><span><Icon name="palette" /></span><div><h2>Тема оформления</h2><p>Выберите цвет стекла и акцентов интерфейса.</p></div></div><div className="theme-picker">{themeOptions.map((theme) => <button key={theme.id} aria-pressed={preferences.theme === theme.id} className={preferences.theme === theme.id ? 'selected' : ''} onClick={() => onChange({ theme: theme.id })}><span className="theme-preview" style={{ '--theme-a': theme.colors[0], '--theme-b': theme.colors[1] } as React.CSSProperties} /><span>{theme.name}</span>{preferences.theme === theme.id && <Icon name="check_circle" />}</button>)}</div></section>
+      <section className="settings-card"><div className="setting-row"><span className="setting-icon"><Icon name="orbit" /></span><div><h2>Анимации</h2><p>Плавные переходы, блики и перелёт обложек.</p></div><button className={`switch${preferences.animationsEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.animationsEnabled} aria-label="Анимации" onClick={() => onChange({ animationsEnabled: !preferences.animationsEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon secure"><Icon name="shield" /></span><div><h2>Блокировка рекламы</h2><p>Фильтрует рекламу и трекеры во встроенном просмотрщике.</p></div><button className={`switch${preferences.adBlockEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.adBlockEnabled} aria-label="Блокировка рекламы" onClick={() => onChange({ adBlockEnabled: !preferences.adBlockEnabled })}><span /></button></div></section>
+      {isDesktop && <section className="settings-card"><div className="settings-card-title"><span><Icon name="keyboard" /></span><div><h2>Быстрое сворачивание</h2><p>Глобальное сочетание работает, даже когда открыто другое окно.</p></div></div><div className={`shortcut-recorder${recording ? ' recording' : ''}`}><div><small>Текущее сочетание</small><kbd>{recording ? 'Нажмите клавиши…' : displayAccelerator(preferences.minimizeShortcut)}</kbd></div><button className="soft-btn" onClick={beginCapture}>{recording ? 'Слушаю…' : 'Изменить'}</button><button className="ghost" onClick={() => void onShortcut('CommandOrControl+Shift+M').then((error) => setShortcutError(error || ''))}>По умолчанию</button></div>{shortcutError && <p className="setting-error">{shortcutError}</p>}</section>}
+    </div>
+  </section>
+}
+
 export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect, onOpenLink }: {
   book: Book
   origin?: BookOpenOrigin | null
@@ -240,7 +333,7 @@ export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect,
   onClose: () => void
   onAdd: () => void
   onCollect: () => void
-  onOpenLink: (url: string) => void
+  onOpenLink: (url: string, details: { task?: string; provider: string }) => void
 }) {
   const [taskSearch, setTaskSearch] = useState('')
   const coverRef = useRef<HTMLDivElement | null>(null)
@@ -291,19 +384,19 @@ export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect,
         <div className="solution-list">
           <div className="list-head"><b>{taskSearch.trim() ? `Источники для «${taskSearch.trim()}»` : 'Все доступные источники'}</b><span>{filtered.length + availableProviders.length + (book.sourceUrl ? 1 : 0)}</span></div>
           {filtered.map((item) => (
-            <button className="solution-item" key={item.id} onClick={() => onOpenLink(item.url)}>
+            <button className="solution-item" key={item.id} onClick={() => onOpenLink(item.url, { task: item.task, provider: item.provider })}>
               <ProviderLogo provider={item.provider} url={item.url} />
               <span><b>{item.task}</b><small>{item.provider} · {item.note || 'Внешний источник'}</small></span>
               <Icon name="open_in_new" />
             </button>
           ))}
-          {book.sourceUrl && <button className="solution-item provider-search" onClick={() => onOpenLink(book.sourceUrl!)}>
+          {book.sourceUrl && <button className="solution-item provider-search" onClick={() => onOpenLink(book.sourceUrl!, { task: taskSearch.trim() ? `Задание ${taskSearch.trim()}` : 'Страница учебника', provider: book.sourceName || 'Решёба' })}>
             <ProviderLogo provider={book.sourceName || 'Решёба'} url={book.sourceUrl} />
             <span><b>{book.sourceName || 'Источник учебника'} · этот учебник</b><small>{taskSearch.trim() ? `Открыть учебник и найти задание ${taskSearch.trim()}` : 'Открыть страницу учебника'}</small></span>
             <Icon name="open_in_new" />
           </button>}
           {availableProviders.map((provider) => (
-            <button className="solution-item provider-search" key={provider.domain} onClick={() => onOpenLink(sourceUrl(provider.domain))}>
+            <button className="solution-item provider-search" key={provider.domain} onClick={() => onOpenLink(sourceUrl(provider.domain), { task: taskSearch.trim() ? `Задание ${taskSearch.trim()}` : 'Каталог решений', provider: provider.name })}>
               <span className="provider-logo provider-brand"><img src={provider.icon} alt="" /></span>
               <span><b>{provider.name}</b><small>{taskSearch.trim() ? `Найти задание ${taskSearch.trim()} · ${provider.region}` : `Открыть каталог · ${provider.region}`}</small></span>
               <Icon name="open_in_new" />
@@ -566,7 +659,7 @@ export function CollectionsPage({ collections, activeId, books, favorites, sourc
 
 const Webview = 'webview' as any
 
-export function SourceBrowser({ url, onClose, onExternal }: { url: string; onClose: () => void; onExternal: (url: string) => void }) {
+export function SourceBrowser({ url, adBlockEnabled, onClose, onExternal }: { url: string; adBlockEnabled: boolean; onClose: () => void; onExternal: (url: string) => void }) {
   const webviewRef = useRef<any>(null)
   const [currentUrl, setCurrentUrl] = useState(url)
   const [loading, setLoading] = useState(true)
@@ -579,16 +672,20 @@ export function SourceBrowser({ url, onClose, onExternal }: { url: string; onClo
       setLoading(true)
       finishTimer = window.setTimeout(() => setLoading(false), 15_000)
     }
+    const hideAdSlots = () => {
+      if (adBlockEnabled) void view.insertCSS?.('.adsbygoogle,[id^="yandex_rtb"],.adfox,[data-ad],iframe[src*="doubleclick"],iframe[src*="googlesyndication"]{display:none!important;visibility:hidden!important;max-height:0!important}')
+    }
     const stop = () => {
       window.clearTimeout(finishTimer)
       setLoading(false)
       setCurrentUrl(view.getURL?.() || url)
     }
+    const ready = () => { stop(); hideAdSlots() }
     const navigate = (event: { url?: string }) => event.url && setCurrentUrl(event.url)
     view.addEventListener('did-start-loading', start)
     view.addEventListener('did-stop-loading', stop)
     view.addEventListener('did-fail-load', stop)
-    view.addEventListener('dom-ready', stop)
+    view.addEventListener('dom-ready', ready)
     view.addEventListener('did-navigate', navigate)
     view.addEventListener('did-navigate-in-page', navigate)
     return () => {
@@ -596,17 +693,18 @@ export function SourceBrowser({ url, onClose, onExternal }: { url: string; onClo
       view.removeEventListener('did-start-loading', start)
       view.removeEventListener('did-stop-loading', stop)
       view.removeEventListener('did-fail-load', stop)
-      view.removeEventListener('dom-ready', stop)
+      view.removeEventListener('dom-ready', ready)
       view.removeEventListener('did-navigate', navigate)
       view.removeEventListener('did-navigate-in-page', navigate)
     }
-  }, [url])
+  }, [url, adBlockEnabled])
   return <div className="source-browser">
     <div className="browser-toolbar">
       <button aria-label="Назад" onClick={() => webviewRef.current?.goBack()}><Icon name="arrow_back" /></button>
       <button aria-label="Вперёд" onClick={() => webviewRef.current?.goForward()}><Icon name="arrow_forward" /></button>
       <button aria-label="Обновить страницу" onClick={() => webviewRef.current?.reload()}><Icon name="refresh" /></button>
       <div className={`browser-address ${loading ? 'loading' : ''}`}><Icon name={loading ? 'progress_activity' : 'lock'} /><span>{currentUrl}</span></div>
+      {adBlockEnabled && <span className="adblock-badge" title="Блокировка рекламы включена"><Icon name="shield" /><span>AdBlock</span></span>}
       <button title="Открыть во внешнем браузере" onClick={() => onExternal(currentUrl)}><Icon name="open_in_new" /></button>
       <button title="Закрыть" onClick={onClose}><Icon name="close" /></button>
     </div>

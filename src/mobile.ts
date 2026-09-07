@@ -1,10 +1,16 @@
-import { Capacitor } from '@capacitor/core'
+import { Capacitor, registerPlugin } from '@capacitor/core'
 import { App as NativeApp } from '@capacitor/app'
 import { Browser } from '@capacitor/browser'
 import type { UpdateState } from './types'
 import { androidAssetFor, isNewerVersion, type GitHubRelease } from './lib/update'
 
 export const isNativeAndroid = Capacitor.getPlatform() === 'android'
+
+interface AdBlockBrowserPlugin {
+  open(options: { url: string; adBlockEnabled: boolean }): Promise<void>
+}
+
+const AdBlockBrowser = registerPlugin<AdBlockBrowserPlugin>('AdBlockBrowser')
 
 export async function listenForNativeUrls(onUrl: (url: string) => void) {
   if (!isNativeAndroid) return () => undefined
@@ -18,6 +24,11 @@ export async function listenForNativeUrls(onUrl: (url: string) => void) {
 
 export async function openNativePage(url: string) {
   await Browser.open({ url, presentationStyle: 'fullscreen' })
+}
+
+export async function openNativeSourcePage(url: string, adBlockEnabled = true) {
+  if (!isNativeAndroid) return openNativePage(url)
+  await AdBlockBrowser.open({ url, adBlockEnabled })
 }
 
 export async function closeNativePage() {

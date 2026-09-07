@@ -1,14 +1,18 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js'
 import { books as bundledBooks, decorateBook, demoSolutions, providerSearchesFor } from './data'
-import type { Book, BookCollection, BookOpenOrigin, SolutionLink, View } from './types'
+import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SolutionLink, View } from './types'
 import { createSupabase, getStoredSettings } from './lib/supabase'
-import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, ProfilePage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
-import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage } from './mobile'
+import { addRecentVisit, normalizeRecentVisits, type NewRecentVisit } from './lib/recent'
+import { DEFAULT_PREFERENCES, normalizePreferences, type AppPreferences } from './lib/preferences'
+import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, ProfilePage, RecentPage, SettingsPage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
+import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage, openNativeSourcePage } from './mobile'
 
 const FAVORITES_KEY = 'resharium.favorites'
 const LOCAL_SOLUTIONS_KEY = 'resharium.solutions'
 const COLLECTIONS_KEY = 'resharium.collections'
+const RECENT_KEY = 'resharium.recent:v1'
+const PREFERENCES_KEY = 'resharium.preferences:v1'
 
 function readJson<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || '') as T } catch { return fallback }
@@ -31,6 +35,8 @@ export default function App() {
   const [bookOpenOrigin, setBookOpenOrigin] = useState<BookOpenOrigin | null>(null)
   const [favorites, setFavorites] = useState<string[]>(() => readJson(FAVORITES_KEY, []))
   const [collections, setCollections] = useState<BookCollection[]>(() => readJson(COLLECTIONS_KEY, []))
+  const [recentVisits, setRecentVisits] = useState<RecentVisit[]>(() => normalizeRecentVisits(readJson<unknown>(RECENT_KEY, [])))
+  const [preferences, setPreferences] = useState<AppPreferences>(() => normalizePreferences(readJson<unknown>(PREFERENCES_KEY, DEFAULT_PREFERENCES)))
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
   const [solutions, setSolutions] = useState<SolutionLink[]>(() => [...demoSolutions, ...readJson<SolutionLink[]>(LOCAL_SOLUTIONS_KEY, [])])
   const [settings] = useState(() => getStoredSettings())
@@ -44,7 +50,28 @@ export default function App() {
   const [collectionBook, setCollectionBook] = useState<Book | null>(null)
   const [browserUrl, setBrowserUrl] = useState('')
   const [toast, setToast] = useState('')
-  const searchRef = useRef<HTMLInputElement | null>(null)
+  const pageRef = useRef<HTMLDivElement | null>(null)
+  const preferencesRef = useRef(preferences)
+
+  const updatePreferences = useCallback((changes: Partial<AppPreferences>) => {
+    const next = { ...preferencesRef.current, ...changes }
+    preferencesRef.current = next
+    setPreferences(next)
+    try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(next)) } catch { /* Settings remain active for this session. */ }
+    if (typeof changes.adBlockEnabled === 'boolean') void window.desktop?.setAdBlockEnabled(changes.adBlockEnabled)
+  }, [])
+
+  const changeMinimizeShortcut = useCallback(async (shortcut: string) => {
+    if (!window.desktop) return 'Горячая клавиша доступна только в приложении для Windows'
+    const result = await window.desktop.setMinimizeShortcut(shortcut)
+    if (!result.ok) return result.error || 'Не удалось назначить сочетание'
+    updatePreferences({ minimizeShortcut: result.shortcut })
+    return null
+  }, [updatePreferences])
+
+  const setShortcutCapture = useCallback(async (active: boolean) => {
+    await window.desktop?.setShortcutCapture(active)
+  }, [])
 
   const handleAuthCallback = useCallback(async (callbackUrl: string) => {
     if (!client) return
@@ -70,6 +97,19 @@ export default function App() {
       setToast(error instanceof Error ? `Ошибка входа: ${error.message}` : 'Не удалось завершить вход')
     }
   }, [client])
+
+  useEffect(() => {
+    document.documentElement.dataset.theme = preferences.theme
+    document.documentElement.dataset.motion = preferences.animationsEnabled ? 'full' : 'reduced'
+  }, [preferences.theme, preferences.animationsEnabled])
+
+  useEffect(() => {
+    if (!window.desktop) return
+    window.desktop.getDesktopSettings().then((desktop) => updatePreferences({
+      minimizeShortcut: desktop.minimizeShortcut,
+      adBlockEnabled: desktop.adBlockEnabled,
+    })).catch(() => undefined)
+  }, [updatePreferences])
 
   useEffect(() => {
     if (!client) { setUser(null); return }
@@ -212,6 +252,10 @@ export default function App() {
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
   }, [])
+
+  useEffect(() => {
+    pageRef.current?.scrollTo({ top: 0, behavior: 'instant' })
+  }, [view])
 
   const filteredBooks = useMemo(() => {
     const needle = query.trim().toLowerCase()
@@ -390,15 +434,42 @@ export default function App() {
 
   function openLink(url: string) {
     if (!safeHttpUrl(url)) return setToast('Небезопасная ссылка заблокирована')
-    if (isNativeAndroid) void openNativePage(url)
+    if (isNativeAndroid) void openNativeSourcePage(url, preferences.adBlockEnabled)
     else if (window.desktop) setBrowserUrl(url)
     else window.open(url, '_blank', 'noopener,noreferrer')
   }
 
+  const recordRecent = useCallback((visit: NewRecentVisit) => {
+    setRecentVisits((current) => {
+      const next = addRecentVisit(current, visit)
+      try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch { /* History remains available for this session. */ }
+      return next
+    })
+  }, [])
+
   const openBook = useCallback((book: Book, origin: BookOpenOrigin) => {
+    recordRecent({ kind: 'book', bookId: book.id })
     setBookOpenOrigin(origin)
     setSelectedBook(book)
-  }, [])
+  }, [recordRecent])
+
+  function openBookSolution(url: string, details: { task?: string; provider: string }) {
+    if (selectedBook) recordRecent({ kind: 'solution', bookId: selectedBook.id, url, ...details })
+    openLink(url)
+  }
+
+  function openRecentSolution(visit: RecentVisit) {
+    if (!visit.url || !visit.provider) return
+    recordRecent({ kind: 'solution', bookId: visit.bookId, url: visit.url, task: visit.task, provider: visit.provider })
+    openLink(visit.url)
+  }
+
+  function clearRecent() {
+    if (!window.confirm('Очистить всю историю недавних открытий?')) return
+    setRecentVisits([])
+    try { localStorage.removeItem(RECENT_KEY) } catch { /* Ignore unavailable storage. */ }
+    setToast('История очищена')
+  }
 
   const closeBook = useCallback(() => {
     setSelectedBook(null)
@@ -419,9 +490,9 @@ export default function App() {
     <div className="ambient-bg" aria-hidden="true"><span className="ambient-orb orb-violet" /><span className="ambient-orb orb-cyan" /><span className="ambient-orb orb-rose" /><span className="ambient-grid" /></div>
     <Sidebar view={view} onView={setView} onAdd={() => setShowAdd(true)} user={user} isAdmin={isAdmin} />
     <main className="main-area">
-      <Topbar query={query} setQuery={setQuery} onAuth={() => setShowAuth(true)} />
-      <div className="page" ref={searchRef as never}>
-        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
+      <Topbar query={query} setQuery={setQuery} onAuth={() => setShowAuth(true)} onSettings={() => setView('settings')} />
+      <div className="page" ref={pageRef}>
+        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} onChange={updatePreferences} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
           {view === 'home' && !query && !subject && !grade && <Hero onCatalog={() => setView('catalog')} />}
           <section className="filter-section">
             <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><GradePicker grade={grade} onSelect={setGrade} /></div>
@@ -432,11 +503,11 @@ export default function App() {
         <footer className="app-footer"><span>Решариум · каталог образовательных ссылок</span><UpdateControl /></footer>
       </div>
     </main>
-    {selectedBook && <BookDrawer book={selectedBook} origin={bookOpenOrigin} solutions={publicSolutions.filter((item) => item.book_key === selectedBook.id)} onClose={closeBook} onAdd={() => setShowAdd(true)} onCollect={() => { setCollectionBook(selectedBook); setShowCollection(true) }} onOpenLink={openLink} />}
+    {selectedBook && <BookDrawer book={selectedBook} origin={bookOpenOrigin} solutions={publicSolutions.filter((item) => item.book_key === selectedBook.id)} onClose={closeBook} onAdd={() => setShowAdd(true)} onCollect={() => { setCollectionBook(selectedBook); setShowCollection(true) }} onOpenLink={openBookSolution} />}
     {showAdd && <AddSolutionModal books={books} initialBook={selectedBook} onClose={() => setShowAdd(false)} onSubmit={addSolution} requireAuth={!user} />}
     {showAuth && <AuthModal connected={Boolean(client)} googleEnabled={googleEnabled} user={user} onGoogle={googleLogin} onEmail={emailAuth} onResend={resendConfirmation} onSignOut={() => client?.auth.signOut()} onClose={() => setShowAuth(false)} />}
     {showCollection && <CollectionModal collections={collections} book={collectionBook} onCreate={createCollection} onAdd={addToCollection} onClose={() => setShowCollection(false)} />}
-    {browserUrl && <SourceBrowser url={browserUrl} onClose={() => setBrowserUrl('')} onExternal={openExternal} />}
+    {browserUrl && <SourceBrowser url={browserUrl} adBlockEnabled={preferences.adBlockEnabled} onClose={() => setBrowserUrl('')} onExternal={openExternal} />}
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
   </div>
 }

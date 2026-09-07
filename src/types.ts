@@ -49,7 +49,17 @@ export interface BookCollection {
   createdAt: string
 }
 
-export type View = 'home' | 'catalog' | 'favorites' | 'collections' | 'profile' | 'moderation'
+export interface RecentVisit {
+  id: string
+  kind: 'book' | 'solution'
+  bookId: string
+  openedAt: string
+  task?: string
+  provider?: string
+  url?: string
+}
+
+export type View = 'home' | 'catalog' | 'favorites' | 'recent' | 'collections' | 'profile' | 'settings' | 'moderation'
 
 export interface UpdateState {
   status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error' | 'unsupported'
@@ -70,6 +80,10 @@ declare global {
       checkForUpdates: () => Promise<UpdateState>
       downloadUpdate: () => Promise<boolean>
       installUpdate: () => Promise<boolean>
+      getDesktopSettings: () => Promise<{ minimizeShortcut: string; adBlockEnabled: boolean }>
+      setMinimizeShortcut: (shortcut: string) => Promise<{ ok: boolean; shortcut: string; error?: string }>
+      setAdBlockEnabled: (enabled: boolean) => Promise<boolean>
+      setShortcutCapture: (active: boolean) => Promise<void>
       onUpdateState: (callback: (state: UpdateState) => void) => () => void
     }
   }

@@ -1,11 +1,15 @@
-const { app, BrowserWindow, dialog, ipcMain, shell } = require('electron')
+const { app, BrowserWindow, dialog, globalShortcut, ipcMain, session, shell } = require('electron')
 const { autoUpdater } = require('electron-updater')
+const fs = require('fs')
 const path = require('path')
+const { shouldBlockRequest } = require('./adblock.cjs')
 
 const PROTOCOL = 'resharium'
 let mainWindow
 let pendingAuthUrl = null
 let updatePromptOpen = false
+let desktopSettingsPath = ''
+let desktopSettings = { minimizeShortcut: 'CommandOrControl+Shift+M', adBlockEnabled: true }
 let updateState = {
   status: app.isPackaged ? 'idle' : 'unsupported',
   currentVersion: app.getVersion(),
@@ -93,6 +97,53 @@ function configureUpdater() {
   periodicCheck.unref()
 }
 
+function configureSourceAdBlock() {
+  const sourceSession = session.fromPartition('persist:resharium-sources')
+  sourceSession.webRequest.onBeforeRequest({ urls: ['*://*/*'] }, (details, callback) => {
+    callback({ cancel: desktopSettings.adBlockEnabled && shouldBlockRequest(details.url, details.resourceType) })
+  })
+  sourceSession.setPermissionRequestHandler((_webContents, _permission, callback) => callback(false))
+}
+
+function loadDesktopSettings() {
+  desktopSettingsPath = path.join(app.getPath('userData'), 'desktop-settings.json')
+  try {
+    const stored = JSON.parse(fs.readFileSync(desktopSettingsPath, 'utf8'))
+    if (typeof stored.minimizeShortcut === 'string') desktopSettings.minimizeShortcut = stored.minimizeShortcut
+    if (typeof stored.adBlockEnabled === 'boolean') desktopSettings.adBlockEnabled = stored.adBlockEnabled
+  } catch { /* First launch or an invalid settings file uses safe defaults. */ }
+}
+
+function saveDesktopSettings() {
+  try {
+    fs.mkdirSync(path.dirname(desktopSettingsPath), { recursive: true })
+    fs.writeFileSync(desktopSettingsPath, JSON.stringify(desktopSettings), 'utf8')
+  } catch (error) {
+    console.error('Could not save desktop settings:', error)
+  }
+}
+
+function minimizeWindow() {
+  if (mainWindow && !mainWindow.isDestroyed()) mainWindow.minimize()
+}
+
+function setMinimizeShortcut(shortcut, persist = true) {
+  const next = typeof shortcut === 'string' ? shortcut.trim() : ''
+  const previous = desktopSettings.minimizeShortcut
+  if (previous && globalShortcut.isRegistered(previous)) globalShortcut.unregister(previous)
+  if (next) {
+    let registered = false
+    try { registered = globalShortcut.register(next, minimizeWindow) } catch { registered = false }
+    if (!registered) {
+      if (previous) globalShortcut.register(previous, minimizeWindow)
+      return { ok: false, shortcut: previous, error: 'Это сочетание уже занято системой или другой программой' }
+    }
+  }
+  desktopSettings.minimizeShortcut = next
+  if (persist) saveDesktopSettings()
+  return { ok: true, shortcut: next }
+}
+
 app.on('second-instance', (_event, argv) => {
   deliverAuthUrl(argv.find((arg) => arg.startsWith(`${PROTOCOL}://`)))
   if (mainWindow) {
@@ -173,9 +224,22 @@ ipcMain.handle('updater-install', () => {
   autoUpdater.quitAndInstall(false, true)
   return true
 })
+ipcMain.handle('desktop-settings-get', () => ({ ...desktopSettings }))
+ipcMain.handle('minimize-shortcut-set', (_event, shortcut) => setMinimizeShortcut(shortcut))
+ipcMain.handle('adblock-set', (_event, enabled) => {
+  desktopSettings.adBlockEnabled = enabled === true
+  saveDesktopSettings()
+  return desktopSettings.adBlockEnabled
+})
+ipcMain.handle('shortcut-capture', (_event, active) => {
+  globalShortcut.setSuspended(active === true)
+})
 
 app.whenReady().then(() => {
+  loadDesktopSettings()
+  configureSourceAdBlock()
   createWindow()
+  setMinimizeShortcut(desktopSettings.minimizeShortcut, false)
   configureUpdater()
   app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
@@ -185,3 +249,5 @@ app.whenReady().then(() => {
 app.on('window-all-closed', () => {
   if (process.platform !== 'darwin') app.quit()
 })
+
+app.on('will-quit', () => globalShortcut.unregisterAll())

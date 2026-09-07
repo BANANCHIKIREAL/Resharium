@@ -12,12 +12,31 @@ const errors = []
 async function verify(name, viewport) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: 1, hasTouch: name === 'mobile' })
   page.setDefaultTimeout(10_000)
+  if (name === 'desktop') {
+    await page.addInitScript(() => {
+      window.desktop = {
+        openExternal: async () => undefined,
+        getPendingAuthUrl: async () => null,
+        clearPendingAuthUrl: async () => undefined,
+        onAuthCallback: () => () => undefined,
+        getUpdateState: async () => ({ status: 'idle', currentVersion: '1.4.5' }),
+        checkForUpdates: async () => ({ status: 'not-available', currentVersion: '1.4.5' }),
+        downloadUpdate: async () => false,
+        installUpdate: async () => false,
+        onUpdateState: () => () => undefined,
+        getDesktopSettings: async () => ({ minimizeShortcut: 'CommandOrControl+Shift+M', adBlockEnabled: true }),
+        setMinimizeShortcut: async (shortcut) => ({ ok: true, shortcut }),
+        setAdBlockEnabled: async (enabled) => enabled,
+        setShortcutCapture: async () => undefined,
+      }
+    })
+  }
   page.on('pageerror', (error) => errors.push(`${name}: ${error.message}`))
   page.on('console', (message) => {
     if (message.type() === 'error') errors.push(`${name}: ${message.text()}`)
   })
 
-  await page.goto(baseUrl, { waitUntil: 'networkidle' })
+  await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
   await page.locator('.book-card').first().waitFor()
   if (!(await page.locator('body').innerText()).trim()) throw new Error(`${name}: empty page`)
   if (await page.locator('.vite-error-overlay').count()) throw new Error(`${name}: Vite error overlay`)
@@ -34,6 +53,16 @@ async function verify(name, viewport) {
   if (!(await page.locator('[data-book-id="resheba-1c15ec57ae4cd5d8"] .book-cover img').count())) {
     throw new Error(`${name}: verified sharp source cover is missing`)
   }
+  if (name === 'desktop') {
+    await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+    await page.locator('.shortcut-recorder').waitFor()
+    await page.getByRole('button', { name: 'Изменить' }).click()
+    await page.keyboard.press('Control+Alt+M')
+    await page.getByText('Ctrl+Alt+M', { exact: true }).waitFor()
+    await page.screenshot({ path: resolve(screenshots, 'settings-desktop.png'), fullPage: true })
+    await page.getByRole('button', { name: 'Главная', exact: true }).click()
+    await page.locator('.book-card').first().waitFor()
+  }
   if (name === 'mobile') {
     const collectionsButton = page.getByRole('button', { name: 'Мои подборки', exact: true })
     const tapHighlight = await collectionsButton.evaluate((element) => getComputedStyle(element).webkitTapHighlightColor)
@@ -45,6 +74,25 @@ async function verify(name, viewport) {
       throw new Error('mobile: collections tab did not become active')
     }
     await page.screenshot({ path: resolve(screenshots, 'liquid-glass-mobile.png'), fullPage: true })
+    await page.getByRole('button', { name: 'Настройки', exact: true }).click()
+    await page.locator('.settings-page').waitFor()
+    await page.getByRole('button', { name: 'Океан' }).click()
+    if ((await page.locator('html').getAttribute('data-theme')) !== 'ocean') throw new Error('mobile: selected theme was not applied')
+    await page.screenshot({ path: resolve(screenshots, 'settings-mobile.png'), fullPage: true })
+    await page.getByRole('button', { name: /Фиолетовая/ }).click()
+    await page.getByRole('button', { name: 'Главная' }).click()
+    await page.locator('.book-card').first().waitFor()
+    await page.locator('.book-card').first().click()
+    await page.locator('.drawer').waitFor()
+    await page.getByRole('button', { name: 'Закрыть учебник' }).click()
+    await page.locator('.drawer').waitFor({ state: 'detached' })
+    await page.getByRole('button', { name: 'Недавнее', exact: true }).click()
+    await page.locator('.recent-card').first().waitFor()
+    await page.waitForTimeout(300)
+    if ((await page.locator('.recent-card').count()) !== 1) throw new Error('mobile: opened book was not saved once in recent history')
+    if ((await page.locator('.sidebar nav button.active').getAttribute('aria-label')) !== 'Недавнее') throw new Error('mobile: recent tab did not become active')
+    if ((await page.locator('.page').evaluate((element) => element.scrollTop)) !== 0) throw new Error('mobile: recent page did not reset scroll position')
+    await page.screenshot({ path: resolve(screenshots, 'recent-mobile.png'), fullPage: true })
     await page.getByRole('button', { name: 'Главная' }).click()
     await page.locator('.book-card').first().waitFor()
   }
