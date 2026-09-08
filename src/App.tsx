@@ -13,6 +13,7 @@ const LOCAL_SOLUTIONS_KEY = 'resharium.solutions'
 const COLLECTIONS_KEY = 'resharium.collections'
 const RECENT_KEY = 'resharium.recent:v1'
 const PREFERENCES_KEY = 'resharium.preferences:v1'
+const QUICK_TILE_PROMPT_KEY = 'resharium.quick-tile-prompted:v1'
 
 function readJson<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || '') as T } catch { return fallback }
@@ -106,9 +107,18 @@ export default function App() {
 
   useEffect(() => {
     if (launchPhase === 'hidden') return
-    const leaveTimer = window.setTimeout(() => setLaunchPhase('leaving'), 950)
-    const hideTimer = window.setTimeout(() => setLaunchPhase('hidden'), 1450)
+    const leaveTimer = window.setTimeout(() => setLaunchPhase('leaving'), 900)
+    const hideTimer = window.setTimeout(() => setLaunchPhase('hidden'), 1200)
     return () => { window.clearTimeout(leaveTimer); window.clearTimeout(hideTimer) }
+  }, [])
+
+  useEffect(() => {
+    if (!isNativeAndroid || localStorage.getItem(QUICK_TILE_PROMPT_KEY)) return
+    const timer = window.setTimeout(() => {
+      localStorage.setItem(QUICK_TILE_PROMPT_KEY, '1')
+      void requestQuickSettingsTile().catch(() => undefined)
+    }, 1350)
+    return () => window.clearTimeout(timer)
   }, [])
 
   useEffect(() => {
