@@ -10,7 +10,17 @@ interface AdBlockBrowserPlugin {
   open(options: { url: string; adBlockEnabled: boolean }): Promise<void>
 }
 
+interface QuickSettingsPlugin {
+  requestTile(): Promise<{ supported: boolean; added: boolean; status?: number }>
+}
+
 const AdBlockBrowser = registerPlugin<AdBlockBrowserPlugin>('AdBlockBrowser')
+const QuickSettings = registerPlugin<QuickSettingsPlugin>('QuickSettings')
+
+export async function requestQuickSettingsTile() {
+  if (!isNativeAndroid) return { supported: false, added: false }
+  return QuickSettings.requestTile()
+}
 
 export async function listenForNativeUrls(onUrl: (url: string) => void) {
   if (!isNativeAndroid) return () => undefined

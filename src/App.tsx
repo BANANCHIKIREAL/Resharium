@@ -5,8 +5,8 @@ import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SolutionLink, V
 import { createSupabase, getStoredSettings } from './lib/supabase'
 import { addRecentVisit, normalizeRecentVisits, type NewRecentVisit } from './lib/recent'
 import { DEFAULT_PREFERENCES, normalizePreferences, type AppPreferences } from './lib/preferences'
-import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, ProfilePage, RecentPage, SettingsPage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
-import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage, openNativeSourcePage } from './mobile'
+import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, LaunchIntro, ModerationPage, ProfilePage, RecentPage, SettingsPage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
+import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage, openNativeSourcePage, requestQuickSettingsTile } from './mobile'
 
 const FAVORITES_KEY = 'resharium.favorites'
 const LOCAL_SOLUTIONS_KEY = 'resharium.solutions'
@@ -37,6 +37,7 @@ export default function App() {
   const [collections, setCollections] = useState<BookCollection[]>(() => readJson(COLLECTIONS_KEY, []))
   const [recentVisits, setRecentVisits] = useState<RecentVisit[]>(() => normalizeRecentVisits(readJson<unknown>(RECENT_KEY, [])))
   const [preferences, setPreferences] = useState<AppPreferences>(() => normalizePreferences(readJson<unknown>(PREFERENCES_KEY, DEFAULT_PREFERENCES)))
+  const [launchPhase, setLaunchPhase] = useState<'visible' | 'leaving' | 'hidden'>(() => preferences.animationsEnabled ? 'visible' : 'hidden')
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
   const [solutions, setSolutions] = useState<SolutionLink[]>(() => [...demoSolutions, ...readJson<SolutionLink[]>(LOCAL_SOLUTIONS_KEY, [])])
   const [settings] = useState(() => getStoredSettings())
@@ -102,6 +103,13 @@ export default function App() {
     document.documentElement.dataset.theme = preferences.theme
     document.documentElement.dataset.motion = preferences.animationsEnabled ? 'full' : 'reduced'
   }, [preferences.theme, preferences.animationsEnabled])
+
+  useEffect(() => {
+    if (launchPhase === 'hidden') return
+    const leaveTimer = window.setTimeout(() => setLaunchPhase('leaving'), 950)
+    const hideTimer = window.setTimeout(() => setLaunchPhase('hidden'), 1450)
+    return () => { window.clearTimeout(leaveTimer); window.clearTimeout(hideTimer) }
+  }, [])
 
   useEffect(() => {
     if (!window.desktop) return
@@ -483,16 +491,28 @@ export default function App() {
     else window.open(url, '_blank', 'noopener,noreferrer')
   }
 
+  async function addQuickAccess() {
+    try {
+      const result = await requestQuickSettingsTile()
+      if (result.added) setToast('Кнопка Решариума добавлена в быстрые настройки')
+      else if (!result.supported) setToast('Откройте панель управления, нажмите редактирование и перетащите плитку Решариума вручную')
+      else setToast('Добавление кнопки отменено')
+    } catch (error) {
+      setToast(error instanceof Error ? error.message : 'Не удалось добавить кнопку быстрого доступа')
+    }
+  }
+
   const pageTitle = view === 'favorites' ? 'Избранные разделы' : view === 'catalog' ? 'Каталог классов и предметов' : query || subject || grade ? 'Результаты поиска' : 'Популярные разделы'
   const visibleBooks = view === 'home' && !query && !subject && !grade ? filteredBooks.filter((book) => book.popular) : filteredBooks
 
   return <div className="app-shell">
+    {launchPhase !== 'hidden' && <LaunchIntro leaving={launchPhase === 'leaving'} />}
     <div className="ambient-bg" aria-hidden="true"><span className="ambient-orb orb-violet" /><span className="ambient-orb orb-cyan" /><span className="ambient-orb orb-rose" /><span className="ambient-grid" /></div>
     <Sidebar view={view} onView={setView} onAdd={() => setShowAdd(true)} user={user} isAdmin={isAdmin} />
     <main className="main-area">
       <Topbar query={query} setQuery={setQuery} onAuth={() => setShowAuth(true)} onSettings={() => setView('settings')} />
       <div className="page" ref={pageRef}>
-        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} onChange={updatePreferences} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
+        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} isAndroid={isNativeAndroid} onChange={updatePreferences} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} onQuickAccess={() => void addQuickAccess()} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
           {view === 'home' && !query && !subject && !grade && <Hero onCatalog={() => setView('catalog')} />}
           <section className="filter-section">
             <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><GradePicker grade={grade} onSelect={setGrade} /></div>

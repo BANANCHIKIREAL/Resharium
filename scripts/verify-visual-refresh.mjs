@@ -19,8 +19,8 @@ async function verify(name, viewport) {
         getPendingAuthUrl: async () => null,
         clearPendingAuthUrl: async () => undefined,
         onAuthCallback: () => () => undefined,
-        getUpdateState: async () => ({ status: 'idle', currentVersion: '1.5.0' }),
-        checkForUpdates: async () => ({ status: 'not-available', currentVersion: '1.5.0' }),
+        getUpdateState: async () => ({ status: 'idle', currentVersion: '1.5.1' }),
+        checkForUpdates: async () => ({ status: 'not-available', currentVersion: '1.5.1' }),
         downloadUpdate: async () => false,
         installUpdate: async () => false,
         onUpdateState: () => () => undefined,
@@ -37,6 +37,10 @@ async function verify(name, viewport) {
   })
 
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
+  await page.locator('.launch-intro').waitFor()
+  await page.waitForTimeout(600)
+  await page.locator('.launch-intro').screenshot({ path: resolve(screenshots, `launch-${name}.png`) })
+  await page.locator('.launch-intro').waitFor({ state: 'detached' })
   await page.locator('.book-card').first().waitFor()
   if (!(await page.locator('body').innerText()).trim()) throw new Error(`${name}: empty page`)
   if (await page.locator('.vite-error-overlay').count()) throw new Error(`${name}: Vite error overlay`)

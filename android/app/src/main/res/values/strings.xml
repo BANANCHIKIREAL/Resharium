@@ -2,4 +2,5 @@
 <resources>
     <string name="app_name">Решариум</string>
     <string name="title_activity_main">Решариум</string>
+    <string name="quick_settings_tile_label">Решариум</string>
 </resources>

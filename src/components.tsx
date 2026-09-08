@@ -50,6 +50,17 @@ export function Brand({ compact = false }: { compact?: boolean }) {
   )
 }
 
+export function LaunchIntro({ leaving = false }: { leaving?: boolean }) {
+  return <div className={`launch-intro${leaving ? ' leaving' : ''}`} aria-hidden="true">
+    <div className="launch-aurora one" /><div className="launch-aurora two" />
+    <div className="launch-rings"><i /><i /><i /></div>
+    <div className="launch-logo"><Icon name="auto_stories" /><span /></div>
+    <div className="launch-title">Решариум</div>
+    <div className="launch-caption">Всё получится</div>
+    <div className="launch-line"><span /></div>
+  </div>
+}
+
 export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
   view: View
   onView: (view: View) => void
@@ -274,12 +285,14 @@ const themeOptions: Array<{ id: AppTheme; name: string; colors: [string, string]
   { id: 'sunset', name: 'Закат', colors: ['#f06e9e', '#ff9b59'] },
 ]
 
-export function SettingsPage({ preferences, isDesktop, onChange, onShortcut, onShortcutCapture }: {
+export function SettingsPage({ preferences, isDesktop, isAndroid, onChange, onShortcut, onShortcutCapture, onQuickAccess }: {
   preferences: AppPreferences
   isDesktop: boolean
+  isAndroid: boolean
   onChange: (changes: Partial<AppPreferences>) => void
   onShortcut: (shortcut: string) => Promise<string | null>
   onShortcutCapture: (active: boolean) => Promise<void>
+  onQuickAccess: () => void
 }) {
   const [recording, setRecording] = useState(false)
   const [shortcutError, setShortcutError] = useState('')
@@ -344,6 +357,7 @@ export function SettingsPage({ preferences, isDesktop, onChange, onShortcut, onS
     <div className="settings-groups">
       <section className="settings-card"><div className="settings-card-title"><span><Icon name="palette" /></span><div><h2>Тема оформления</h2><p>Выберите цвет стекла и акцентов интерфейса.</p></div></div><div className="theme-picker">{themeOptions.map((theme) => <button key={theme.id} aria-pressed={preferences.theme === theme.id} className={preferences.theme === theme.id ? 'selected' : ''} onClick={() => onChange({ theme: theme.id })}><span className="theme-preview" style={{ '--theme-a': theme.colors[0], '--theme-b': theme.colors[1] } as React.CSSProperties} /><span>{theme.name}</span>{preferences.theme === theme.id && <Icon name="check_circle" />}</button>)}</div></section>
       <section className="settings-card"><div className="setting-row"><span className="setting-icon"><Icon name="orbit" /></span><div><h2>Анимации</h2><p>Плавные переходы, блики и перелёт обложек.</p></div><button className={`switch${preferences.animationsEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.animationsEnabled} aria-label="Анимации" onClick={() => onChange({ animationsEnabled: !preferences.animationsEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon secure"><Icon name="shield" /></span><div><h2>Блокировка рекламы</h2><p>Фильтрует рекламу и трекеры во встроенном просмотрщике.</p></div><button className={`switch${preferences.adBlockEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.adBlockEnabled} aria-label="Блокировка рекламы" onClick={() => onChange({ adBlockEnabled: !preferences.adBlockEnabled })}><span /></button></div></section>
+      {isAndroid && <section className="settings-card"><div className="settings-card-title"><span><Icon name="bolt" /></span><div><h2>Быстрый доступ</h2><p>Добавьте Решариум в панель быстрых настроек Android.</p></div></div><button className="soft-btn quick-tile-btn" onClick={onQuickAccess}><Icon name="add" />Добавить кнопку</button></section>}
       {isDesktop && <section className="settings-card"><div className="settings-card-title"><span><Icon name="keyboard" /></span><div><h2>Быстрое сворачивание</h2><p>{isModifierOnlyAccelerator(preferences.minimizeShortcut) ? 'Одиночная клавиша работает, пока окно Решариума активно.' : 'Сочетание работает глобально, даже когда открыто другое окно.'}</p></div></div><div className={`shortcut-recorder${recording ? ' recording' : ''}`}><div><small>Текущая клавиша</small><kbd>{recording ? 'Нажмите клавиши…' : displayAccelerator(preferences.minimizeShortcut)}</kbd></div><button className="soft-btn" onClick={beginCapture}>{recording ? 'Слушаю…' : 'Изменить'}</button><button className="ghost" onClick={() => void onShortcut('CommandOrControl+Shift+M').then((error) => setShortcutError(error || ''))}>По умолчанию</button></div>{shortcutError && <p className="setting-error">{shortcutError}</p>}</section>}
     </div>
   </section>
