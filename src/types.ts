@@ -59,7 +59,16 @@ export interface RecentVisit {
   url?: string
 }
 
-export type View = 'home' | 'catalog' | 'favorites' | 'recent' | 'collections' | 'profile' | 'settings' | 'moderation'
+export type ScheduleDayId = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday'
+
+export interface SchoolSchedule {
+  grade: number
+  days: Record<ScheduleDayId, string[]>
+  rawText: string
+  updatedAt: string
+}
+
+export type View = 'home' | 'catalog' | 'favorites' | 'recent' | 'collections' | 'schedule' | 'profile' | 'settings' | 'moderation'
 
 export interface UpdateState {
   status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error' | 'unsupported'

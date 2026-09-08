@@ -1,12 +1,14 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js'
 import { books as bundledBooks, decorateBook, demoSolutions, providerSearchesFor } from './data'
-import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SolutionLink, View } from './types'
+import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SchoolSchedule, SolutionLink, View } from './types'
 import { createSupabase, getStoredSettings } from './lib/supabase'
 import { addRecentVisit, normalizeRecentVisits, type NewRecentVisit } from './lib/recent'
 import { DEFAULT_PREFERENCES, normalizePreferences, type AppPreferences } from './lib/preferences'
-import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, LaunchIntro, ModerationPage, ProfilePage, RecentPage, SettingsPage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
+import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, LaunchIntro, ModerationPage, ProfilePage, RecentPage, SchedulePage, SettingsPage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
 import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage, openNativeSourcePage, requestQuickSettingsTile } from './mobile'
+import { isValidSchedule } from './lib/schedule'
+import { setAmbientVolume, startAmbientMusic, stopAmbientMusic } from './lib/ambient-music'
 
 const FAVORITES_KEY = 'resharium.favorites'
 const LOCAL_SOLUTIONS_KEY = 'resharium.solutions'
@@ -14,6 +16,7 @@ const COLLECTIONS_KEY = 'resharium.collections'
 const RECENT_KEY = 'resharium.recent:v1'
 const PREFERENCES_KEY = 'resharium.preferences:v1'
 const QUICK_TILE_PROMPT_KEY = 'resharium.quick-tile-prompted:v1'
+const SCHEDULE_KEY = 'resharium.schedule:v1'
 
 function readJson<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || '') as T } catch { return fallback }
@@ -38,6 +41,10 @@ export default function App() {
   const [collections, setCollections] = useState<BookCollection[]>(() => readJson(COLLECTIONS_KEY, []))
   const [recentVisits, setRecentVisits] = useState<RecentVisit[]>(() => normalizeRecentVisits(readJson<unknown>(RECENT_KEY, [])))
   const [preferences, setPreferences] = useState<AppPreferences>(() => normalizePreferences(readJson<unknown>(PREFERENCES_KEY, DEFAULT_PREFERENCES)))
+  const [schedule, setSchedule] = useState<SchoolSchedule | null>(() => {
+    const stored = readJson<unknown>(SCHEDULE_KEY, null)
+    return isValidSchedule(stored) ? stored : null
+  })
   const [launchPhase, setLaunchPhase] = useState<'visible' | 'leaving' | 'hidden'>(() => preferences.animationsEnabled ? 'visible' : 'hidden')
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
   const [solutions, setSolutions] = useState<SolutionLink[]>(() => [...demoSolutions, ...readJson<SolutionLink[]>(LOCAL_SOLUTIONS_KEY, [])])
@@ -104,6 +111,24 @@ export default function App() {
     document.documentElement.dataset.theme = preferences.theme
     document.documentElement.dataset.motion = preferences.animationsEnabled ? 'full' : 'reduced'
   }, [preferences.theme, preferences.animationsEnabled])
+
+  useEffect(() => {
+    if (!preferences.musicEnabled) {
+      stopAmbientMusic()
+      return
+    }
+    const start = () => { void startAmbientMusic(preferences.musicVolume) }
+    window.addEventListener('pointerdown', start, { once: true })
+    window.addEventListener('keydown', start, { once: true })
+    return () => {
+      window.removeEventListener('pointerdown', start)
+      window.removeEventListener('keydown', start)
+    }
+  }, [preferences.musicEnabled])
+
+  useEffect(() => setAmbientVolume(preferences.musicVolume), [preferences.musicVolume])
+
+  useEffect(() => () => stopAmbientMusic(), [])
 
   useEffect(() => {
     if (launchPhase === 'hidden') return
@@ -512,6 +537,12 @@ export default function App() {
     }
   }
 
+  function saveSchedule(next: SchoolSchedule) {
+    setSchedule(next)
+    try { localStorage.setItem(SCHEDULE_KEY, JSON.stringify(next)) } catch { /* Schedule remains active for this session. */ }
+    setToast('Расписание сохранено')
+  }
+
   const pageTitle = view === 'favorites' ? 'Избранные разделы' : view === 'catalog' ? 'Каталог классов и предметов' : query || subject || grade ? 'Результаты поиска' : 'Популярные разделы'
   const visibleBooks = view === 'home' && !query && !subject && !grade ? filteredBooks.filter((book) => book.popular) : filteredBooks
 
@@ -522,7 +553,7 @@ export default function App() {
     <main className="main-area">
       <Topbar query={query} setQuery={setQuery} onAuth={() => setShowAuth(true)} onSettings={() => setView('settings')} />
       <div className="page" ref={pageRef}>
-        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} isAndroid={isNativeAndroid} onChange={updatePreferences} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} onQuickAccess={() => void addQuickAccess()} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
+        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} isAndroid={isNativeAndroid} onChange={updatePreferences} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} onQuickAccess={() => void addQuickAccess()} /> : view === 'schedule' ? <SchedulePage schedule={schedule} books={books} favorites={favorites} sourceCounts={sourceCounts} onSave={saveSchedule} onFavorite={toggleFavorite} onOpen={openBook} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
           {view === 'home' && !query && !subject && !grade && <Hero onCatalog={() => setView('catalog')} />}
           <section className="filter-section">
             <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><GradePicker grade={grade} onSelect={setGrade} /></div>

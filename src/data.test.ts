@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { books, providerIconFor, providerSearchesFor, solutionIconFor } from './data'
+import { books, providerBookSearchUrl, providerIconFor, providerSearchesFor, solutionIconFor } from './data'
 
 function section(grade: number, subject: string) {
   const book = books.find((item) => item.grade === grade && item.subject === subject)
@@ -36,6 +36,17 @@ describe('verified provider availability', () => {
   it('has a real favicon for every automatic provider', () => {
     for (const item of providerSearchesFor(section(7, 'Химия'))) {
       expect(providerIconFor(item.provider)).toMatch(/assets\/providers\/.+\.png$/)
+    }
+  })
+
+  it('builds a textbook-specific search for every alternative provider', () => {
+    const book = section(7, 'Химия')
+    for (const provider of providerSearchesFor(book)) {
+      const url = new URL(providerBookSearchUrl(book, provider.domain))
+      const query = url.searchParams.get('q') || ''
+      expect(query).toContain(`site:${provider.domain}`)
+      expect(query).toContain(book.title)
+      expect(query).not.toBe(`site:${provider.domain}`)
     }
   })
 

@@ -1,7 +1,7 @@
 import { MorphIcon, type IconInput } from 'morphicons/react'
 import {
   ArrowLeft, ArrowRight, ArrowUp, Atom, BadgeCheck, Book, BookMarked,
-  BookOpen, BookOpenCheck, Bookmark, BookmarkCheck, Calculator, CaseSensitive,
+  BookOpen, BookOpenCheck, Bookmark, BookmarkCheck, Calculator, CalendarCheck, CalendarDays, CaseSensitive,
   Check, ChevronDown, ChevronUp, CircleCheck, CircleUserRound, ClipboardCheck, Clock3,
   CloudOff, CloudSync, Code, Dna, DraftingCompass, Download, ExternalLink,
   FlaskConical, Folder, FolderCheck, FolderOpen, FolderPlus, FolderHeart, Globe,
@@ -10,7 +10,7 @@ import {
   MailCheck, MessageCircle, Mic, Music, Palette, Pencil, Plus, RefreshCw,
   RotateCcw, Satellite, Save, ScrollText, Search, SearchX, Settings, Shield, ShieldCheck,
   ShieldPlus, SpellCheck, Stethoscope, Theater, Trash2, Trees, Type,
-  UserRound, UserRoundCog, UsersRound, Wrench, X, Zap, CircleAlert,
+  Upload, UserRound, UserRoundCog, UsersRound, Volume2, Wrench, X, Zap, CircleAlert,
 } from 'lucide'
 
 // Lucide icon data, as used by morphicons.com. Named imports keep the bundle small.
@@ -20,6 +20,7 @@ export const iconData = {
   arrow_back: ArrowLeft, arrow_forward: ArrowRight, arrow_upward: ArrowUp,
   auto_stories: BookOpen, bolt: Zap, book_2: BookMarked, bookmark: Bookmark,
   calculate: Calculator, chat: MessageCircle, check: Check, check_circle: CircleCheck,
+  calendar_month: CalendarDays,
   close: X, cloud_off: CloudOff, cloud_sync: CloudSync, code: Code,
   construction: Wrench, create_new_folder: FolderPlus, delete: Trash2,
   download: Download, expand_more: ChevronDown, expand_less: ChevronUp,
@@ -37,6 +38,7 @@ export const iconData = {
   settings: Settings, shield: Shield, space_dashboard: LayoutDashboard, spellcheck: SpellCheck,
   stylus: Pencil, system_update: Download, text_fields: Type,
   theater_comedy: Theater, translate: Languages, verified: BadgeCheck,
+  upload_file: Upload, volume_up: Volume2,
 } satisfies Record<string, IconInput>
 
 export type IconName = keyof typeof iconData
@@ -52,6 +54,7 @@ const selectedIcons: Partial<Record<IconName, IconInput>> = {
   shield: ShieldCheck,
   auto_stories: Book,
   history: History,
+  calendar_month: CalendarCheck,
 }
 
 export function Icon({ name, filled = false }: { name: IconName; filled?: boolean }) {

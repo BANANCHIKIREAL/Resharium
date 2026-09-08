@@ -191,6 +191,11 @@ export function providerOptionsFor(book: Book) {
   return [...providerSearchesFor(book).map((item) => item.provider), 'Другое']
 }
 
+export function providerBookSearchUrl(book: Book, domain: string, task = '') {
+  const terms = [`site:${domain}`, book.title, book.author, `${book.grade} класс`, task ? `${task} решение` : 'учебник'].filter(Boolean)
+  return `https://www.google.com/search?q=${encodeURIComponent(terms.join(' '))}`
+}
+
 export function providerIconFor(provider: string) {
   return providerIcons[provider as keyof typeof providerIcons]
 }

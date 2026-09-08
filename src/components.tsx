@@ -1,11 +1,12 @@
-import { useEffect, useLayoutEffect, useRef, useState, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
-import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SolutionLink, UpdateState, View } from './types'
-import { providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor, subjects } from './data'
+import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SchoolSchedule, ScheduleDayId, SolutionLink, UpdateState, View } from './types'
+import { providerBookSearchUrl, providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor, subjects } from './data'
 import { profileAvatarUrl } from './avatar'
 import { Icon, type IconName } from './icons'
 import { checkAndroidUpdate, getAndroidUpdateState, installAndroidUpdate, isNativeAndroid } from './mobile'
 import { displayAccelerator, isModifierOnlyAccelerator, keyboardEventToAccelerator, modifierKeyToAccelerator, type AppPreferences, type AppTheme } from './lib/preferences'
+import { booksForDay, currentScheduleDay, parseSchedule, SCHEDULE_DAYS, subjectsForLesson } from './lib/schedule'
 
 function bookCoverStyle(book: Book) {
   return {
@@ -74,6 +75,7 @@ export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
     { id: 'favorites' as const, icon: 'bookmark', label: 'Избранное' },
     { id: 'recent' as const, icon: 'history', label: 'Недавнее' },
     { id: 'collections' as const, icon: 'folder_special', label: 'Мои подборки' },
+    { id: 'schedule' as const, icon: 'calendar_month', label: 'Расписание' },
   ]
   if (isAdmin) nav.push({ id: 'moderation', icon: 'fact_check', label: 'Модерация' })
   return (
@@ -243,6 +245,92 @@ export function BookGrid({ books, favorites, sourceCounts, onFavorite, onOpen, t
   )
 }
 
+export function SchedulePage({ schedule, books, favorites, sourceCounts, onSave, onFavorite, onOpen }: {
+  schedule: SchoolSchedule | null
+  books: Book[]
+  favorites: string[]
+  sourceCounts: Record<string, number>
+  onSave: (schedule: SchoolSchedule) => void
+  onFavorite: (id: string) => void
+  onOpen: (book: Book, origin: BookOpenOrigin) => void
+}) {
+  const [selectedDay, setSelectedDay] = useState<ScheduleDayId>(currentScheduleDay)
+  const [editorOpen, setEditorOpen] = useState(!schedule)
+  const [grade, setGrade] = useState(schedule?.grade || 7)
+  const [rawText, setRawText] = useState(schedule?.rawText || '')
+  const [ocrProgress, setOcrProgress] = useState<number | null>(null)
+  const [error, setError] = useState('')
+  const dayBooks = useMemo(() => schedule ? booksForDay(schedule, selectedDay, books) : [], [books, schedule, selectedDay])
+  const lessons = schedule?.days[selectedDay] || []
+
+  async function readScheduleFile(event: ChangeEvent<HTMLInputElement>) {
+    const file = event.target.files?.[0]
+    event.target.value = ''
+    if (!file) return
+    setError('')
+    if (file.type.startsWith('text/') || /\.(txt|csv)$/i.test(file.name)) {
+      setRawText(await file.text())
+      setEditorOpen(true)
+      return
+    }
+    setOcrProgress(0)
+    try {
+      const { createWorker } = await import('tesseract.js')
+      const worker = await createWorker(['rus', 'bel'], undefined, {
+        logger: (message) => {
+          if (message.status === 'recognizing text') setOcrProgress(Math.round((message.progress || 0) * 100))
+        },
+      })
+      try {
+        const result = await worker.recognize(file)
+        setRawText(result.data.text)
+        setEditorOpen(true)
+      } finally {
+        await worker.terminate()
+      }
+    } catch {
+      setError('Не удалось распознать изображение. Вставьте расписание текстом и сохраните.')
+    } finally {
+      setOcrProgress(null)
+    }
+  }
+
+  function save() {
+    const parsed = parseSchedule(rawText, grade)
+    if (!SCHEDULE_DAYS.some(({ id }) => parsed.days[id].length)) {
+      setError('Не найдены дни недели. Добавьте названия дней и уроки каждый с новой строки.')
+      return
+    }
+    onSave(parsed)
+    setEditorOpen(false)
+    setError('')
+  }
+
+  return <section className="schedule-page">
+    <div className="schedule-hero">
+      <div><span className="eyebrow">Учебный день</span><h1>Моё расписание</h1><p>Загрузите фото или вставьте текст — Решариум подберёт разделы учебников для уроков выбранного дня.</p></div>
+      <div className="schedule-actions">
+        <label className="soft-btn file-button"><Icon name="upload_file" />{ocrProgress === null ? 'Загрузить расписание' : `Распознаём ${ocrProgress}%`}<input type="file" accept="image/*,.txt,.csv,text/plain,text/csv" disabled={ocrProgress !== null} onChange={(event) => void readScheduleFile(event)} /></label>
+        {schedule && <button className="soft-btn" onClick={() => setEditorOpen((value) => !value)}><Icon name="stylus" />Изменить</button>}
+      </div>
+    </div>
+    {editorOpen && <div className="schedule-editor">
+      <div className="schedule-editor-head"><div><h2>Проверьте расписание</h2><p>После распознавания исправьте возможные ошибки перед сохранением.</p></div><label>Класс<select value={grade} onChange={(event) => setGrade(Number(event.target.value))}>{Array.from({ length: 11 }, (_, index) => index + 1).map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div>
+      <textarea value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder={'Понедельник\n1. Математика\n2. Русский язык\n\nВторник\n1. Физика'} />
+      {error && <p className="form-error">{error}</p>}
+      <div className="schedule-save"><small>Поддерживаются русские и белорусские названия дней и предметов.</small><button className="primary" onClick={save}><Icon name="save" />Сохранить</button></div>
+    </div>}
+    {schedule && <>
+      <div className="day-tabs" role="tablist" aria-label="День недели">{SCHEDULE_DAYS.map((day) => <button key={day.id} role="tab" aria-selected={selectedDay === day.id} className={selectedDay === day.id ? 'active' : ''} onClick={() => setSelectedDay(day.id)}><span>{day.short}</span><b>{day.label}</b></button>)}</div>
+      <div className="lesson-strip">{lessons.length ? lessons.map((lesson, index) => {
+        const matched = subjectsForLesson(lesson)
+        return <article key={`${lesson}-${index}`}><span>{index + 1}</span><div><b>{lesson}</b><small>{matched.length ? matched.join(', ') : 'Для этого урока раздел учебника не найден'}</small></div></article>
+      }) : <EmptyState title="Уроков нет" text="Добавьте уроки этого дня в расписание." />}</div>
+      <BookGrid books={dayBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={onFavorite} onOpen={onOpen} title={`Учебники на ${SCHEDULE_DAYS.find((day) => day.id === selectedDay)?.label.toLowerCase()}`} />
+    </>}
+  </section>
+}
+
 export function EmptyState({ title, text }: { title: string; text: string }) {
   return <div className="empty"><span><Icon name="search_off" /></span><h3>{title}</h3><p>{text}</p></div>
 }
@@ -356,7 +444,7 @@ export function SettingsPage({ preferences, isDesktop, isAndroid, onChange, onSh
     <div className="settings-heading"><span className="eyebrow">Персонализация</span><h1>Настройки</h1><p>Параметры сохраняются только на этом устройстве.</p></div>
     <div className="settings-groups">
       <section className="settings-card"><div className="settings-card-title"><span><Icon name="palette" /></span><div><h2>Тема оформления</h2><p>Выберите цвет стекла и акцентов интерфейса.</p></div></div><div className="theme-picker">{themeOptions.map((theme) => <button key={theme.id} aria-pressed={preferences.theme === theme.id} className={preferences.theme === theme.id ? 'selected' : ''} onClick={() => onChange({ theme: theme.id })}><span className="theme-preview" style={{ '--theme-a': theme.colors[0], '--theme-b': theme.colors[1] } as React.CSSProperties} /><span>{theme.name}</span>{preferences.theme === theme.id && <Icon name="check_circle" />}</button>)}</div></section>
-      <section className="settings-card"><div className="setting-row"><span className="setting-icon"><Icon name="orbit" /></span><div><h2>Анимации</h2><p>Плавные переходы, блики и перелёт обложек.</p></div><button className={`switch${preferences.animationsEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.animationsEnabled} aria-label="Анимации" onClick={() => onChange({ animationsEnabled: !preferences.animationsEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon secure"><Icon name="shield" /></span><div><h2>Блокировка рекламы</h2><p>Фильтрует рекламу и трекеры во встроенном просмотрщике.</p></div><button className={`switch${preferences.adBlockEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.adBlockEnabled} aria-label="Блокировка рекламы" onClick={() => onChange({ adBlockEnabled: !preferences.adBlockEnabled })}><span /></button></div></section>
+      <section className="settings-card"><div className="setting-row"><span className="setting-icon"><Icon name="orbit" /></span><div><h2>Анимации</h2><p>Плавные переходы, блики и перелёт обложек.</p></div><button className={`switch${preferences.animationsEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.animationsEnabled} aria-label="Анимации" onClick={() => onChange({ animationsEnabled: !preferences.animationsEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon"><Icon name="volume_up" /></span><div><h2>Спокойная музыка</h2><p>Тихий фоновый эмбиент во время занятий.</p>{preferences.musicEnabled && <input className="volume-slider" aria-label="Громкость музыки" type="range" min="0" max="0.35" step="0.01" value={preferences.musicVolume} onChange={(event) => onChange({ musicVolume: Number(event.target.value) })} />}</div><button className={`switch${preferences.musicEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.musicEnabled} aria-label="Спокойная музыка" onClick={() => onChange({ musicEnabled: !preferences.musicEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon secure"><Icon name="shield" /></span><div><h2>Блокировка рекламы</h2><p>Фильтрует рекламу и трекеры во встроенном просмотрщике.</p></div><button className={`switch${preferences.adBlockEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.adBlockEnabled} aria-label="Блокировка рекламы" onClick={() => onChange({ adBlockEnabled: !preferences.adBlockEnabled })}><span /></button></div></section>
       {isAndroid && <section className="settings-card"><div className="settings-card-title"><span><Icon name="bolt" /></span><div><h2>Быстрый доступ</h2><p>Добавьте Решариум в панель быстрых настроек Android.</p></div></div><button className="soft-btn quick-tile-btn" onClick={onQuickAccess}><Icon name="add" />Добавить кнопку</button></section>}
       {isDesktop && <section className="settings-card"><div className="settings-card-title"><span><Icon name="keyboard" /></span><div><h2>Быстрое сворачивание</h2><p>{isModifierOnlyAccelerator(preferences.minimizeShortcut) ? 'Одиночная клавиша работает, пока окно Решариума активно.' : 'Сочетание работает глобально, даже когда открыто другое окно.'}</p></div></div><div className={`shortcut-recorder${recording ? ' recording' : ''}`}><div><small>Текущая клавиша</small><kbd>{recording ? 'Нажмите клавиши…' : displayAccelerator(preferences.minimizeShortcut)}</kbd></div><button className="soft-btn" onClick={beginCapture}>{recording ? 'Слушаю…' : 'Изменить'}</button><button className="ghost" onClick={() => void onShortcut('CommandOrControl+Shift+M').then((error) => setShortcutError(error || ''))}>По умолчанию</button></div>{shortcutError && <p className="setting-error">{shortcutError}</p>}</section>}
     </div>
@@ -401,9 +489,7 @@ export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect,
   }, [book.id, origin])
   const filtered = solutions.filter((item) => item.task.toLowerCase().includes(taskSearch.toLowerCase()))
   const availableProviders = providerSearchesFor(book).filter((provider) => provider.provider !== book.sourceName)
-  const sourceUrl = (domain: string) => taskSearch.trim()
-    ? `https://www.google.com/search?q=${encodeURIComponent(`site:${domain} ${book.title} ${book.grade} класс ${taskSearch.trim()} решение`)}`
-    : `https://${domain}/`
+  const sourceUrl = (domain: string) => providerBookSearchUrl(book, domain, taskSearch.trim())
   return (
     <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
       <aside className={`drawer${origin ? ' has-book-morph' : ''}`}>
@@ -435,7 +521,7 @@ export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect,
           {availableProviders.map((provider) => (
             <button className="solution-item provider-search" key={provider.domain} onClick={() => onOpenLink(sourceUrl(provider.domain), { task: taskSearch.trim() ? `Задание ${taskSearch.trim()}` : 'Каталог решений', provider: provider.name })}>
               <span className="provider-logo provider-brand"><img src={provider.icon} alt="" /></span>
-              <span><b>{provider.name}</b><small>{taskSearch.trim() ? `Найти задание ${taskSearch.trim()} · ${provider.region}` : `Открыть каталог · ${provider.region}`}</small></span>
+              <span><b>{provider.name} · этот учебник</b><small>{taskSearch.trim() ? `Найти задание ${taskSearch.trim()} · ${provider.region}` : `Найти страницу учебника · ${provider.region}`}</small></span>
               <Icon name="open_in_new" />
             </button>
           ))}

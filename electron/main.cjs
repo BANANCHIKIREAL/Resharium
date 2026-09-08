@@ -187,10 +187,14 @@ function createWindow() {
 
   mainWindow.setMenuBarVisibility(false)
 
-  mainWindow.webContents.on('before-input-event', (_event, input) => {
+  const handleModifierShortcut = (_event, input) => {
     if (shortcutCaptureActive || input.type !== 'keyUp') return
     const pressed = input.key === 'Meta' ? 'Super' : input.key
     if (isModifierOnlyShortcut(desktopSettings.minimizeShortcut) && pressed === desktopSettings.minimizeShortcut) minimizeWindow()
+  }
+  mainWindow.webContents.on('before-input-event', handleModifierShortcut)
+  mainWindow.webContents.on('did-attach-webview', (_event, guestWebContents) => {
+    guestWebContents.on('before-input-event', handleModifierShortcut)
   })
 
   if (process.env.VITE_DEV_SERVER_URL) {

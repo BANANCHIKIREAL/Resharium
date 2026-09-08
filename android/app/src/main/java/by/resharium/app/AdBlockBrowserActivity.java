@@ -59,6 +59,7 @@ public class AdBlockBrowserActivity extends AppCompatActivity {
         address.setEllipsize(android.text.TextUtils.TruncateAt.MIDDLE);
         address.setTextColor(Color.rgb(160, 162, 174));
         address.setTextSize(12);
+        address.setMinWidth(0);
         address.setPadding(dp(12), 0, dp(12), 0);
         address.setBackgroundColor(Color.rgb(11, 12, 17));
         LinearLayout.LayoutParams addressParams = new LinearLayout.LayoutParams(0, dp(42), 1f);
@@ -66,7 +67,7 @@ public class AdBlockBrowserActivity extends AppCompatActivity {
         toolbar.addView(address, addressParams);
 
         adBlockBadge = new TextView(this);
-        adBlockBadge.setText(adBlockEnabled ? "✓ 0" : "AdBlock off");
+        adBlockBadge.setText(adBlockEnabled ? "✓ 0" : "Off");
         adBlockBadge.setGravity(Gravity.CENTER);
         adBlockBadge.setTextColor(Color.rgb(111, 218, 171));
         adBlockBadge.setTextSize(11);
@@ -134,6 +135,7 @@ public class AdBlockBrowserActivity extends AppCompatActivity {
         button.setOnClickListener(listener);
         button.setBackgroundColor(Color.TRANSPARENT);
         button.setContentDescription(text.equals("×") ? "Закрыть" : text);
+        button.setLayoutParams(new LinearLayout.LayoutParams(dp(38), dp(42)));
         return button;
     }
 

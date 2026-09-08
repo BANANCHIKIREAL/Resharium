@@ -6,7 +6,8 @@ const errors = []
 page.on('console', (message) => message.type() === 'error' && errors.push(message.text()))
 page.on('pageerror', (error) => errors.push(error.message))
 
-await page.goto('http://127.0.0.1:5173', { waitUntil: 'networkidle' })
+await page.goto('http://127.0.0.1:5173', { waitUntil: 'domcontentloaded' })
+await page.waitForTimeout(1500)
 await page.waitForSelector('.book-card')
 const cardCount = await page.locator('.book-card').count()
 if (cardCount < 20) throw new Error(`Ожидалось не меньше 20 популярных карточек, найдено ${cardCount}`)
@@ -37,10 +38,10 @@ const drawerLayout = await page.evaluate(() => {
   }
 })
 if (!drawerLayout || drawerLayout.overlayZ <= drawerLayout.sidebarZ || drawerLayout.left !== 0 || drawerLayout.width !== drawerLayout.innerWidth) throw new Error(`Некорректный drawer: ${JSON.stringify(drawerLayout)}`)
-await page.screenshot({ path: 'screenshots/mobile-drawer-1.3.0.png', fullPage: false })
+await page.screenshot({ path: 'screenshots/mobile-drawer-1.6.0.png', fullPage: false })
 
 await page.locator('.drawer-head .icon-btn').click()
-await page.locator('.topbar .icon-btn').click()
+await page.getByRole('button', { name: 'Аккаунт' }).click()
 await page.waitForSelector('.modal')
 await page.waitForTimeout(300)
 const modalLayout = await page.evaluate(() => {
@@ -56,7 +57,7 @@ const modalLayout = await page.evaluate(() => {
   }
 })
 if (!modalLayout || modalLayout.overlayZ <= modalLayout.sidebarZ) throw new Error(`Нижняя панель перекрывает modal: ${JSON.stringify(modalLayout)}`)
-await page.screenshot({ path: 'screenshots/mobile-auth-1.3.0.png', fullPage: false })
+await page.screenshot({ path: 'screenshots/mobile-auth-1.6.0.png', fullPage: false })
 
 await browser.close()
 if (errors.length) throw new Error(`Ошибки страницы:\n${errors.join('\n')}`)

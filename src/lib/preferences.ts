@@ -5,6 +5,8 @@ export interface AppPreferences {
   animationsEnabled: boolean
   adBlockEnabled: boolean
   minimizeShortcut: string
+  musicEnabled: boolean
+  musicVolume: number
 }
 
 export const DEFAULT_PREFERENCES: AppPreferences = {
@@ -12,6 +14,8 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   animationsEnabled: true,
   adBlockEnabled: true,
   minimizeShortcut: 'CommandOrControl+Shift+M',
+  musicEnabled: true,
+  musicVolume: 0.12,
 }
 
 const themes = new Set<AppTheme>(['violet', 'ocean', 'emerald', 'sunset'])
@@ -24,6 +28,8 @@ export function normalizePreferences(value: unknown): AppPreferences {
     animationsEnabled: typeof stored.animationsEnabled === 'boolean' ? stored.animationsEnabled : DEFAULT_PREFERENCES.animationsEnabled,
     adBlockEnabled: typeof stored.adBlockEnabled === 'boolean' ? stored.adBlockEnabled : DEFAULT_PREFERENCES.adBlockEnabled,
     minimizeShortcut: typeof stored.minimizeShortcut === 'string' ? stored.minimizeShortcut : DEFAULT_PREFERENCES.minimizeShortcut,
+    musicEnabled: typeof stored.musicEnabled === 'boolean' ? stored.musicEnabled : DEFAULT_PREFERENCES.musicEnabled,
+    musicVolume: typeof stored.musicVolume === 'number' && Number.isFinite(stored.musicVolume) ? Math.min(1, Math.max(0, stored.musicVolume)) : DEFAULT_PREFERENCES.musicVolume,
   }
 }
 
