@@ -1,6 +1,6 @@
 {
   "name": "resharium",
-  "version": "1.6.0",
+  "version": "0.5.3",
   "private": true,
   "type": "module",
   "description": "Современный каталог ссылок на решения школьных заданий",
@@ -13,6 +13,7 @@
   "bugs": "https://github.com/BANANCHIKIREAL/Resharium/issues",
   "main": "electron/main.cjs",
   "scripts": {
+    "build:site": "node scripts/build-website.mjs",
     "catalog:refresh": "node scripts/fetch-resheba-catalog.mjs",
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build:web": "tsc -b && vite build",

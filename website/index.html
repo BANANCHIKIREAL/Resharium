@@ -1,0 +1,79 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <meta name="theme-color" content="#0b0b0e">
+  <meta name="description" content="Решариум — учебники, расписание и белорусские ГДЗ в одном приложении. Скачайте актуальную версию для Windows и Android.">
+  <meta property="og:title" content="Решариум — всё сложится.">
+  <meta property="og:description" content="Твои учебники. Твоё расписание. Твой ритм. Приложение для Windows и Android.">
+  <meta property="og:type" content="website">
+  <title>Решариум — всё сложится.</title>
+  <link rel="icon" href="./assets/app-icon.png">
+  <link rel="stylesheet" href="./style.css">
+  <script type="module" src="./app.js"></script>
+</head>
+<body>
+  <a class="skip-link" href="#main">Перейти к содержимому</a>
+  <svg class="icon-library" xmlns="http://www.w3.org/2000/svg" aria-hidden="true"><defs>
+    <symbol id="i-book" viewBox="0 0 24 24"><path d="M12 7c-3-2-6-3-10-2v15c4-1 7 0 10 2 3-2 6-3 10-2V5c-4-1-7 0-10 2Zm0 0v15"/></symbol>
+    <symbol id="i-arrow" viewBox="0 0 24 24"><path d="M5 12h14m-6-6 6 6-6 6"/></symbol>
+    <symbol id="i-down" viewBox="0 0 24 24"><path d="M12 3v13m-5-5 5 5 5-5M4 16v5h16v-5"/></symbol>
+    <symbol id="i-win" viewBox="0 0 24 24"><path d="m3 5 8-1v7H3Zm10-1 8-1v8h-8ZM3 13h8v7l-8-1Zm10 0h8v8l-8-1Z"/></symbol>
+    <symbol id="i-android" viewBox="0 0 24 24"><path d="m7 5-2-3m12 3 2-3M3 12a9 9 0 0 1 18 0v6H3ZM7 18v4m10-4v4M7.5 8h.01M16.5 8h.01"/></symbol>
+    <symbol id="i-search" viewBox="0 0 24 24"><circle cx="10.5" cy="10.5" r="6.5"/><path d="m16 16 5 5"/></symbol>
+    <symbol id="i-calendar" viewBox="0 0 24 24"><rect x="3" y="5" width="18" height="16" rx="3"/><path d="M7 2v6m10-6v6M3 11h18m-13 5 3 3 5-5"/></symbol>
+    <symbol id="i-folder" viewBox="0 0 24 24"><path d="M3 7V5a2 2 0 0 1 2-2h5l3 4h6a2 2 0 0 1 2 2v11H3Zm7 7 2 2 4-4"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M10 18V5l11-2v13M10 9l11-2"/><ellipse cx="6.5" cy="18" rx="3.5" ry="3"/><ellipse cx="17.5" cy="16" rx="3.5" ry="3"/></symbol>
+    <symbol id="i-check" viewBox="0 0 24 24"><path d="m5 12 4 4L19 6"/></symbol>
+    <symbol id="i-spark" viewBox="0 0 24 24"><path d="m12 2 3 7 7 3-7 3-3 7-3-7-7-3 7-3Z"/></symbol>
+  </defs></svg>
+  <header class="header">
+    <a class="brand" href="#" aria-label="Решариум — на главную"><span class="brand-symbol"><svg><use href="#i-book"/></svg></span>решариум<span class="brand-dot">®</span></a>
+    <nav aria-label="Основная навигация"><a href="#possibilities">Возможности</a><a href="#inside">Внутри приложения</a><a href="#questions">Вопросы</a></nav>
+    <a class="nav-download" href="#download">Скачать <svg><use href="#i-down"/></svg></a>
+  </header>
+  <main id="main">
+    <section class="hero" aria-labelledby="hero-title">
+      <div class="hero-copy">
+        <a class="release-pill" href="#download"><span class="status-dot"></span>Решариум <span data-version>@@VERSION@@</span><span class="pill-divider"></span>Уже здесь <svg><use href="#i-arrow"/></svg></a>
+        <h1 id="hero-title">Меньше хаоса.<br>Больше <span class="serif-word">ясности.</span></h1>
+        <p class="hero-description">Учебники, решения и расписание —<br>в одном месте. Освободи голову<br>для чего-нибудь поинтереснее.</p>
+        <div class="hero-actions"><a class="button primary" href="#download">Забрать приложение <svg><use href="#i-arrow"/></svg></a><a class="text-link" href="#inside">Посмотреть внутри <span>↗</span></a></div>
+        <div class="platform-note"><svg><use href="#i-win"/></svg><svg><use href="#i-android"/></svg><span>Windows и Android</span><span class="mini-dot"></span><span>Бесплатно</span></div>
+      </div>
+      <div class="hero-visual" role="img" aria-label="Парящие объёмные учебники по математике, физике и химии">
+        <div class="scene-glow"></div><div class="scene-grid"></div>
+        <div class="scene" id="book-scene">
+          <div class="orbit orbit-one"></div><div class="orbit orbit-two"></div>
+          <div class="floating-label label-top"><span class="status-dot"></span>Твоя школьная вселенная</div>
+          <div class="book-object chemistry"><div class="book-body"><div class="book-face"><div class="book-topline">РЕШАРИУМ <span>07</span></div><span class="book-formula">H₂O</span><div class="book-bottom"><small>ЭЛЕМЕНТАРНО</small><strong>Химия</strong></div></div><div class="book-spine">ХИМИЯ · 7 КЛАСС</div><div class="book-pages"></div></div></div>
+          <div class="book-object physics"><div class="book-body"><div class="book-face"><div class="book-topline">РЕШАРИУМ <span>07</span></div><div class="atom-art"><i></i><i></i><i></i><b></b></div><div class="book-bottom"><small>ВСЁ ОТНОСИТЕЛЬНО</small><strong>Физика</strong></div></div><div class="book-spine">ФИЗИКА · 7 КЛАСС</div><div class="book-pages"></div></div></div>
+          <div class="book-object mathematics"><div class="book-body"><div class="book-face"><div class="book-topline">РЕШАРИУМ <span>07</span></div><div class="math-art"><span>∑</span><i></i><i></i></div><div class="book-bottom"><small>ВСЁ СЛОЖИТСЯ</small><strong>Математика</strong></div><span class="cover-sticker">ТВОЙ<br>СУПЕРСКИЛЛ ↗</span></div><div class="book-spine">МАТЕМАТИКА · 7 КЛАСС</div><div class="book-pages"></div></div></div>
+          <div class="floating-chip chip-check"><svg><use href="#i-check"/></svg></div><div class="floating-chip chip-spark"><svg><use href="#i-spark"/></svg></div>
+          <div class="floating-label label-bottom"><span>Всё нужное</span><b>в одном приложении <span>↗</span></b></div>
+          <span class="scene-star star-one">✦</span><span class="scene-star star-two">✧</span><span class="scene-star star-three">+</span>
+        </div>
+        <span class="scene-caption">СОБЕРИ СВОЮ ОРБИТУ ЗНАНИЙ</span>
+      </div>
+      <div class="hero-bottom"><span>СОЗДАНО ДЛЯ ШКОЛЬНИКОВ БЕЛАРУСИ <span class="belarus-mark">BY</span></span><a href="#possibilities">Листай, тут интересно <span>↓</span></a></div>
+    </section>
+    <section class="source-strip" aria-label="Источники решений"><span>Знакомые источники.<br><b>Новое удобство.</b></span><div><img src="./assets/resheba.png" alt="">Решёба</div><div><img src="./assets/gdz-by.png" alt="">GDZ.by</div><div><img src="./assets/gdz-online.png" alt="">ГДЗ Онлайн</div><div><img src="./assets/megaresheba.png" alt="">Мегарешеба</div></section>
+    <section class="section possibilities" id="possibilities">
+      <div class="section-heading reveal"><div><span class="eyebrow">01 / ВСЁ НА СВОИХ МЕСТАХ</span><h2>Школа сложная.<br><span class="muted">Приложение — нет.</span></h2></div><p>Когда всё под рукой,<br>учиться немного спокойнее.</p></div>
+      <div class="feature-grid">
+        <article class="feature feature-catalog reveal"><div class="feature-text"><span class="feature-icon"><svg><use href="#i-search"/></svg></span><h3>Тот самый учебник.<br>За пару секунд.</h3><p>Ищи по названию, автору, классу или предмету. Обложки помогут узнать свою книгу.</p></div><div class="mini-catalog" aria-hidden="true"><div class="mini-search"><svg><use href="#i-search"/></svg>Математика, 7 класс<span>↵</span></div><div class="mini-book-row"><span class="mini-cover purple">∑<small>Математика</small></span><div><small>7 КЛАСС</small><b>Алгебра</b><span>Учебники и решения</span></div><span class="mini-open">↗</span></div><div class="mini-book-row"><span class="mini-cover green">△<small>Геометрия</small></span><div><small>7 КЛАСС</small><b>Геометрия</b><span>Всё для твоего урока</span></div><span class="mini-open">↗</span></div></div></article>
+        <article class="feature feature-schedule reveal"><span class="feature-icon"><svg><use href="#i-calendar"/></svg></span><h3>Твой день.<br>Уже собран.</h3><p>Загрузи фото расписания, проверь распознанный текст — и получи учебники по дням.</p><div class="week-demo" aria-label="Пример выбора дня недели"><div class="week-tabs"><button type="button" class="active" aria-pressed="true" data-day="0">Пн</button><button type="button" aria-pressed="false" data-day="1">Вт</button><button type="button" aria-pressed="false" data-day="2">Ср</button><button type="button" aria-pressed="false" data-day="3">Чт</button><button type="button" aria-pressed="false" data-day="4">Пт</button></div><div class="week-lessons" aria-live="polite"><span><i>01</i><b>Математика</b><small>09:00</small></span><span><i>02</i><b>Русский язык</b><small>10:00</small></span><span><i>03</i><b>Физика</b><small>11:00</small></span></div><small class="demo-caption">Пример расписания</small></div></article>
+        <article class="feature feature-collections reveal"><span class="feature-icon"><svg><use href="#i-folder"/></svg></span><h3>Своя полка.<br>Свои правила.</h3><p>Создавай подборки и сохраняй любимые учебники, чтобы возвращаться к ним сразу.</p><div class="folder-art" aria-hidden="true"><div class="folder-sheet one"></div><div class="folder-sheet two"></div><div class="folder-front"><svg><use href="#i-book"/></svg><span>Мой 7 класс <b>↗</b></span></div></div></article>
+        <article class="feature feature-focus reveal"><div><span class="feature-icon"><svg><use href="#i-music"/></svg></span><h3>Поймай свой ритм.</h3><p>Спокойная фоновая музыка, темы оформления и плавные анимации. Настрой пространство под себя.</p></div><div class="sound-art" aria-hidden="true"><div class="vinyl"><div><svg><use href="#i-music"/></svg></div></div><span class="sound-label">МЕНЬШЕ ШУМА · БОЛЬШЕ ФОКУСА</span></div></article>
+      </div>
+    </section>
+    <section class="section inside" id="inside"><div class="section-heading reveal"><div><span class="eyebrow">02 / ПРИЯТНО ОТКРЫВАТЬ КАЖДЫЙ ДЕНЬ</span><h2>Красиво снаружи.<br><span class="serif-word">Удобно внутри.</span></h2></div><div class="preview-controls" role="group" aria-label="Цвет предпросмотра"><button class="theme-dot violet active" data-theme="violet" aria-label="Фиолетовая тема" aria-pressed="true"></button><button class="theme-dot ocean" data-theme="ocean" aria-label="Тема Океан" aria-pressed="false"></button><button class="theme-dot emerald" data-theme="emerald" aria-label="Изумрудная тема" aria-pressed="false"></button><span>Выбери настроение</span></div></div>
+      <div class="app-showcase reveal" data-preview-theme="violet"><div class="window-bar"><div class="window-dots"><i></i><i></i><i></i></div><span>Решариум</span><span>Твоя маленькая школьная вселенная</span></div><div class="preview-layout"><aside class="preview-sidebar"><div class="preview-brand"><svg><use href="#i-book"/></svg>Решариум</div><span class="selected">▦ <b>Главная</b></span><span>▤ <b>Каталог</b></span><span>♡ <b>Избранное</b></span><span>◷ <b>Недавнее</b></span><span>▱ <b>Мои подборки</b></span><span>▦ <b>Расписание</b></span><small>ВСЁ ПОЛУЧИТСЯ</small></aside><div class="preview-main"><div class="preview-search"><svg><use href="#i-search"/></svg>Учебник, автор, предмет…<span>⌘</span></div><div class="preview-welcome"><div><small>НАСТРОЙСЯ НА СВОЙ РИТМ</small><h3>Найди решение.<br>Пойми ход мысли.</h3><span>Все нужные источники в одном каталоге.</span></div><svg><use href="#i-book"/></svg></div><div class="preview-subjects"><span class="active">Все</span><span>Математика</span><span>Русский язык</span><span>Физика</span><span>Химия</span></div><div class="preview-title"><b>Твои учебники</b><span>Всё под рукой ↗</span></div><div class="preview-books"><div><span class="mini-cover purple">∑<small>Математика</small></span><b>Математика</b><small>7 класс</small></div><div><span class="mini-cover green">◎<small>Физика</small></span><b>Физика</b><small>7 класс</small></div><div><span class="mini-cover peach">H₂O<small>Химия</small></span><b>Химия</b><small>7 класс</small></div><div><span class="mini-cover blue">Aa<small>Русский язык</small></span><b>Русский язык</b><small>7 класс</small></div></div></div></div></div><p class="preview-footnote">Интерактивный предпросмотр оформления. Содержимое каталога зависит от класса и источника.</p>
+    </section>
+    <section class="download-section section" id="download"><div class="download-orbit" aria-hidden="true"></div><div class="download-heading reveal"><span class="eyebrow">03 / ТВОЙ НОВЫЙ ШКОЛЬНЫЙ РИТУАЛ</span><h2>Ну что,<br><span class="serif-word">всё сложится?</span></h2><p>Забирай Решариум. Твои учебники уже ждут.</p></div><div class="download-cards reveal"><article class="download-card"><div class="download-card-top"><span class="platform-icon"><svg><use href="#i-win"/></svg></span><span class="version-tag">v<span data-version>@@VERSION@@</span></span></div><h3>Для большого экрана.</h3><p>Windows · установщик EXE · <span data-size="windows">@@WINDOWS_SIZE@@</span></p><a class="button primary platform-download" data-download="windows" href="@@WINDOWS_URL@@">Скачать для Windows <svg><use href="#i-down"/></svg></a><small>Учебное пространство на твоём компьютере</small></article><article class="download-card"><div class="download-card-top"><span class="platform-icon"><svg><use href="#i-android"/></svg></span><span class="version-tag">v<span data-version>@@VERSION@@</span></span></div><h3>Всегда с собой.</h3><p>Android · файл APK · <span data-size="android">@@ANDROID_SIZE@@</span></p><a class="button secondary platform-download" data-download="android" href="@@ANDROID_URL@@">Скачать для Android <svg><use href="#i-down"/></svg></a><small>В том числе для Huawei на Android</small></article></div><div class="release-status"><span class="status-dot"></span><span id="release-status" role="status">Последний опубликованный релиз · <span data-version>@@VERSION@@</span></span><a data-release-link href="@@RELEASE_URL@@" target="_blank" rel="noopener noreferrer">Что нового ↗</a></div></section>
+    <section class="section faq" id="questions"><div><span class="eyebrow">ЕЩЁ ПАРА МОМЕНТОВ</span><h2>Есть вопрос?</h2><p>Вот ответы на самые частые.</p></div><div class="faq-list"><details><summary>Это бесплатно?<span>+</span></summary><p>Да. Скачать Решариум и пользоваться каталогом, подборками, расписанием и настройками можно бесплатно.</p></details><details><summary>Подойдёт для моей школы?<span>+</span></summary><p>Решариум ориентирован на школьников Беларуси. В каталоге собраны белорусские учебники и ссылки на Решёбу, GDZ.by и другие источники. Наличие решений зависит от учебника и сайта.</p></details><details><summary>Как получать обновления?<span>+</span></summary><p>Кнопки на этой странице ведут к актуальному опубликованному релизу. Скачай новый установщик для Windows или APK для Android и установи поверх текущей версии. В приложении также есть проверка обновлений.</p></details><details><summary>Работает на Huawei?<span>+</span></summary><p>Android-версию можно установить из APK без Google Play. Поддержка конкретного устройства зависит от версии Android. HarmonyOS NEXT, не поддерживающая Android APK, не подходит.</p></details><details><summary>Нужен ли аккаунт?<span>+</span></summary><p>Каталог доступен в гостевом режиме. Для синхронизации поддерживаемых данных между устройствами можно войти в аккаунт. Расписание и настройки хранятся на устройстве.</p></details></div></section>
+  </main>
+  <footer class="footer"><a class="brand" href="#"><span class="brand-symbol"><svg><use href="#i-book"/></svg></span>решариум</a><span>Маленькое приложение. Чуть легче школьные дни.</span><a href="https://github.com/BANANCHIKIREAL/Resharium" target="_blank" rel="noopener noreferrer">GitHub ↗</a><small>Содержимое источников принадлежит их правообладателям.</small></footer>
+</body>
+</html>

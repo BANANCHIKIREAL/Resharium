@@ -9,6 +9,7 @@ import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, Col
 import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage, openNativeSourcePage, requestQuickSettingsTile } from './mobile'
 import { isValidSchedule } from './lib/schedule'
 import { setAmbientVolume, startAmbientMusic, stopAmbientMusic } from './lib/ambient-music'
+import { WebsitePromo, WEBSITE_URL } from './WebsitePromo'
 
 const FAVORITES_KEY = 'resharium.favorites'
 const LOCAL_SOLUTIONS_KEY = 'resharium.solutions'
@@ -554,7 +555,7 @@ export default function App() {
       <Topbar query={query} setQuery={setQuery} onAuth={() => setShowAuth(true)} onSettings={() => setView('settings')} />
       <div className="page" ref={pageRef}>
         {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} isAndroid={isNativeAndroid} onChange={updatePreferences} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} onQuickAccess={() => void addQuickAccess()} /> : view === 'schedule' ? <SchedulePage schedule={schedule} books={books} favorites={favorites} sourceCounts={sourceCounts} onSave={saveSchedule} onFavorite={toggleFavorite} onOpen={openBook} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
-          {view === 'home' && !query && !subject && !grade && <Hero onCatalog={() => setView('catalog')} />}
+          {view === 'home' && !query && !subject && !grade && <><Hero onCatalog={() => setView('catalog')} /><WebsitePromo onOpen={() => { void openExternal(WEBSITE_URL).catch(() => setToast('Не удалось открыть сайт. Попробуйте ещё раз.')) }} /></>}
           <section className="filter-section">
             <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><GradePicker grade={grade} onSelect={setGrade} /></div>
             <SubjectRow active={subject} onSelect={setSubject} />

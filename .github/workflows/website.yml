@@ -1,0 +1,41 @@
+name: Publish Resharium website
+
+on:
+  push:
+    branches: [main]
+    paths: ['website/**', 'scripts/build-website.mjs', 'assets/**', '.github/workflows/website.yml']
+  release:
+    types: [published, edited]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: website-pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Build site with latest published downloads
+        run: node scripts/build-website.mjs
+        env:
+          GH_TOKEN: ${{ github.token }}
+      - uses: actions/configure-pages@v5
+      - uses: actions/upload-pages-artifact@v4
+        with:
+          path: website-dist
+      - name: Deploy
+        id: deployment
+        uses: actions/deploy-pages@v4
