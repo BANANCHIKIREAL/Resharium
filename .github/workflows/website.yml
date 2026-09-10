@@ -3,7 +3,7 @@ name: Publish Resharium website
 on:
   push:
     branches: [main]
-    paths: ['website/**', 'scripts/build-website.mjs', 'assets/**', '.github/workflows/website.yml']
+    paths: ['website/**', 'scripts/build-website.mjs', 'assets/**', 'package.json', '.github/workflows/website.yml']
   release:
     types: [published, edited]
   workflow_dispatch:
@@ -25,6 +25,9 @@ jobs:
       url: ${{ steps.deployment.outputs.page_url }}
     steps:
       - uses: actions/checkout@v6
+        with:
+          # Editing an older release must not roll the website code back to that tag.
+          ref: main
       - uses: actions/setup-node@v4
         with:
           node-version: '22'
