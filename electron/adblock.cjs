@@ -1,15 +1,16 @@
 const BLOCKED_HOSTS = [
   '2mdn.net', 'adfox.ru', 'adnxs.com', 'adsrvr.org', 'bidswitch.net',
   'clarity.ms', 'criteo.com', 'criteo.net', 'doubleclick.net', 'facebook.net',
-  'google-analytics.com', 'googleadservices.com', 'googlesyndication.com',
+  'google-analytics.com', 'googleadservices.com', 'googlesyndication.com', 'googletagmanager.com',
   'hotjar.com', 'mytarget.ru', 'openx.net', 'outbrain.com', 'pubmatic.com',
   'rubiconproject.com', 'scorecardresearch.com', 'smartadserver.com',
-  'taboola.com', 'tns-counter.ru', 'yandexadexchange.net',
+  'taboola.com', 'tns-counter.ru', 'yandexadexchange.net', 'moatads.com', 'amazon-adsystem.com',
 ]
 
 const BLOCKED_EXACT_HOSTS = new Set([
   'ad.mail.ru', 'ads.adfox.ru', 'an.yandex.ru', 'counter.yadro.ru',
   'mc.yandex.ru', 'pagead2.googlesyndication.com', 'securepubads.g.doubleclick.net',
+  'play.pm.by', 'adservice.google.com', 'adservice.google.by',
 ])
 
 function isBlockedHost(hostname) {

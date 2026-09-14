@@ -12,12 +12,23 @@ const res = path.join(root, 'android', 'app', 'src', 'main', 'res')
 function resize(image, width, height) {
   const output = new PNG({ width, height })
   for (let y = 0; y < height; y += 1) {
-    const sourceY = Math.min(image.height - 1, Math.floor(((y + 0.5) * image.height) / height))
+    const sourceY = Math.max(0, Math.min(image.height - 1, ((y + 0.5) * image.height) / height - 0.5))
+    const y0 = Math.floor(sourceY)
+    const y1 = Math.min(image.height - 1, y0 + 1)
+    const fy = sourceY - y0
     for (let x = 0; x < width; x += 1) {
-      const sourceX = Math.min(image.width - 1, Math.floor(((x + 0.5) * image.width) / width))
-      const from = (sourceY * image.width + sourceX) * 4
+      const sourceX = Math.max(0, Math.min(image.width - 1, ((x + 0.5) * image.width) / width - 0.5))
+      const x0 = Math.floor(sourceX)
+      const x1 = Math.min(image.width - 1, x0 + 1)
+      const fx = sourceX - x0
       const to = (y * width + x) * 4
-      image.data.copy(output.data, to, from, from + 4)
+      for (let channel = 0; channel < 4; channel += 1) {
+        const a = image.data[(y0 * image.width + x0) * 4 + channel]
+        const b = image.data[(y0 * image.width + x1) * 4 + channel]
+        const c = image.data[(y1 * image.width + x0) * 4 + channel]
+        const d = image.data[(y1 * image.width + x1) * 4 + channel]
+        output.data[to + channel] = Math.round((a * (1 - fx) + b * fx) * (1 - fy) + (c * (1 - fx) + d * fx) * fy)
+      }
     }
   }
   return output

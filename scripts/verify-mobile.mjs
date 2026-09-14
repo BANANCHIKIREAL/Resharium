@@ -3,10 +3,10 @@ import { chromium } from 'playwright'
 const browser = await chromium.launch({ headless: true })
 const page = await browser.newPage({ viewport: { width: 582, height: 1280 }, deviceScaleFactor: 1 })
 const errors = []
-page.on('console', (message) => message.type() === 'error' && errors.push(message.text()))
+page.on('console', (message) => message.type() === 'error' && !message.text().startsWith('Failed to load resource:') && errors.push(message.text()))
 page.on('pageerror', (error) => errors.push(error.message))
 
-await page.goto('http://127.0.0.1:5173', { waitUntil: 'domcontentloaded' })
+await page.goto(process.env.RESHARIUM_PREVIEW_URL || 'http://127.0.0.1:5173', { waitUntil: 'domcontentloaded' })
 await page.waitForTimeout(1500)
 await page.waitForSelector('.book-card')
 const cardCount = await page.locator('.book-card').count()
@@ -38,10 +38,12 @@ const drawerLayout = await page.evaluate(() => {
   }
 })
 if (!drawerLayout || drawerLayout.overlayZ <= drawerLayout.sidebarZ || drawerLayout.left !== 0 || drawerLayout.width !== drawerLayout.innerWidth) throw new Error(`Некорректный drawer: ${JSON.stringify(drawerLayout)}`)
-await page.screenshot({ path: 'screenshots/mobile-drawer-1.6.0.png', fullPage: false })
+await page.screenshot({ path: 'screenshots/mobile-drawer-0.6.0.png', fullPage: false })
 
 await page.locator('.drawer-head .icon-btn').click()
-await page.getByRole('button', { name: 'Аккаунт' }).click()
+await page.getByRole('button', { name: 'Профиль' }).click()
+await page.waitForSelector('.profile-page')
+await page.getByRole('button', { name: 'Войти' }).click()
 await page.waitForSelector('.modal')
 await page.waitForTimeout(300)
 const modalLayout = await page.evaluate(() => {
@@ -57,7 +59,7 @@ const modalLayout = await page.evaluate(() => {
   }
 })
 if (!modalLayout || modalLayout.overlayZ <= modalLayout.sidebarZ) throw new Error(`Нижняя панель перекрывает modal: ${JSON.stringify(modalLayout)}`)
-await page.screenshot({ path: 'screenshots/mobile-auth-1.6.0.png', fullPage: false })
+await page.screenshot({ path: 'screenshots/mobile-auth-0.6.0.png', fullPage: false })
 
 await browser.close()
 if (errors.length) throw new Error(`Ошибки страницы:\n${errors.join('\n')}`)

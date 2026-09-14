@@ -28,3 +28,12 @@ export function normalizeRecentVisits(value: unknown): RecentVisit[] {
       && (visit.kind !== 'solution' || (typeof visit.url === 'string' && typeof visit.provider === 'string'))
   }).slice(0, RECENT_VISITS_LIMIT)
 }
+
+export function mergeRecentVisits(...groups: RecentVisit[][]) {
+  const unique = new Map<string, RecentVisit>()
+  groups.flat().forEach((visit) => {
+    const previous = unique.get(visit.id)
+    if (!previous || Date.parse(visit.openedAt) > Date.parse(previous.openedAt)) unique.set(visit.id, visit)
+  })
+  return [...unique.values()].sort((a, b) => Date.parse(b.openedAt) - Date.parse(a.openedAt)).slice(0, RECENT_VISITS_LIMIT)
+}

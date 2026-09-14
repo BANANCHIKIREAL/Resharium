@@ -59,41 +59,20 @@ export interface RecentVisit {
   url?: string
 }
 
-export type ScheduleDayId = 'monday' | 'tuesday' | 'wednesday' | 'thursday' | 'friday' | 'saturday'
-
-export interface SchoolSchedule {
-  grade: number
-  days: Record<ScheduleDayId, string[]>
-  rawText: string
-  updatedAt: string
-}
-
-export type View = 'home' | 'catalog' | 'favorites' | 'recent' | 'collections' | 'schedule' | 'profile' | 'settings' | 'moderation'
-
-export interface UpdateState {
-  status: 'idle' | 'checking' | 'available' | 'downloading' | 'downloaded' | 'not-available' | 'error' | 'unsupported'
-  currentVersion: string
-  availableVersion?: string
-  progress?: number
-  message?: string
-}
+export type View = 'home' | 'catalog' | 'favorites' | 'recent' | 'collections' | 'profile' | 'settings' | 'moderation'
 
 declare global {
   interface Window {
     desktop?: {
       openExternal: (url: string) => Promise<void>
+      getAppVersion: () => Promise<string>
       getPendingAuthUrl: () => Promise<string | null>
       clearPendingAuthUrl: () => Promise<void>
       onAuthCallback: (callback: (url: string) => void) => () => void
-      getUpdateState: () => Promise<UpdateState>
-      checkForUpdates: () => Promise<UpdateState>
-      downloadUpdate: () => Promise<boolean>
-      installUpdate: () => Promise<boolean>
       getDesktopSettings: () => Promise<{ minimizeShortcut: string; adBlockEnabled: boolean }>
       setMinimizeShortcut: (shortcut: string) => Promise<{ ok: boolean; shortcut: string; error?: string }>
       setAdBlockEnabled: (enabled: boolean) => Promise<boolean>
       setShortcutCapture: (active: boolean) => Promise<void>
-      onUpdateState: (callback: (state: UpdateState) => void) => () => void
     }
   }
 }

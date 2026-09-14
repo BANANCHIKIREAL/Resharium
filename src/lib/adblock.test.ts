@@ -10,6 +10,7 @@ describe('embedded browser ad blocker', () => {
   it('blocks advertising and tracking subrequests', () => {
     expect(shouldBlockRequest('https://pagead2.googlesyndication.com/pagead/js/adsbygoogle.js', 'script')).toBe(true)
     expect(shouldBlockRequest('https://mc.yandex.ru/watch/123', 'image')).toBe(true)
+    expect(shouldBlockRequest('https://play.pm.by/banner', 'subFrame')).toBe(true)
   })
 
   it('does not block normal pages or top-level navigation', () => {

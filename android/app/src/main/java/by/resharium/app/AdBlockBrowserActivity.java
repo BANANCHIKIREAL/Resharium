@@ -25,7 +25,7 @@ import java.io.ByteArrayInputStream;
 public class AdBlockBrowserActivity extends AppCompatActivity {
     public static final String EXTRA_URL = "url";
     public static final String EXTRA_ADBLOCK = "adBlockEnabled";
-    private static final String HIDE_ADS_SCRIPT = "(function(){var s=document.getElementById('resharium-adblock');if(!s){s=document.createElement('style');s.id='resharium-adblock';s.textContent='.adsbygoogle,[id^=\\\"yandex_rtb\\\"],.adfox,[data-ad],iframe[src*=\\\"doubleclick\\\"],iframe[src*=\\\"googlesyndication\\\"]{display:none!important;visibility:hidden!important;max-height:0!important}';document.documentElement.appendChild(s)}})()";
+    private static final String HIDE_ADS_SCRIPT = "(function(){var q='.adsbygoogle,[id^=\\\"yandex_rtb\\\"],.adfox,[data-ad],[data-ad-slot],[class*=\\\"advert\\\"],[id*=\\\"advert\\\"],iframe[src*=\\\"doubleclick\\\"],iframe[src*=\\\"googlesyndication\\\"],iframe[src*=\\\"play.pm.by\\\"]';var hide=function(){document.querySelectorAll(q).forEach(function(e){e.style.setProperty('display','none','important');e.style.setProperty('visibility','hidden','important');e.style.setProperty('max-height','0','important')})};var s=document.getElementById('resharium-adblock');if(!s){s=document.createElement('style');s.id='resharium-adblock';s.textContent=q+'{display:none!important;visibility:hidden!important;max-height:0!important}';document.documentElement.appendChild(s);new MutationObserver(hide).observe(document.documentElement,{childList:true,subtree:true})}hide()})()";
     private WebView webView;
     private TextView address;
     private int blockedCount = 0;

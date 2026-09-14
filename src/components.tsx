@@ -1,26 +1,37 @@
-import { useEffect, useLayoutEffect, useMemo, useRef, useState, type ChangeEvent, type FormEvent } from 'react'
+import { useEffect, useLayoutEffect, useMemo, useRef, useState, type FormEvent } from 'react'
 import type { User } from '@supabase/supabase-js'
-import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SchoolSchedule, ScheduleDayId, SolutionLink, UpdateState, View } from './types'
+import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SolutionLink, View } from './types'
 import { providerBookSearchUrl, providerIconFor, providerOptionsFor, providerSearchesFor, solutionIconFor, subjects } from './data'
 import { profileAvatarUrl } from './avatar'
 import { Icon, type IconName } from './icons'
-import { checkAndroidUpdate, getAndroidUpdateState, installAndroidUpdate, isNativeAndroid } from './mobile'
+import { getAndroidAppVersion, isNativeAndroid } from './mobile'
 import { displayAccelerator, isModifierOnlyAccelerator, keyboardEventToAccelerator, modifierKeyToAccelerator, type AppPreferences, type AppTheme } from './lib/preferences'
-import { booksForDay, currentScheduleDay, parseSchedule, SCHEDULE_DAYS, subjectsForLesson } from './lib/schedule'
+import { latestReleaseFor, normalizeVersion, type GitHubRelease } from './lib/update'
 
 function bookCoverStyle(book: Book) {
   return {
     '--book-color': book.color,
     '--book-accent': book.accent,
-    '--book-glow': `${book.color}66`,
+    '--book-glow': `${book.accent}55`,
   } as React.CSSProperties
 }
 
 function BookCoverContent({ book, descriptive = false }: { book: Book; descriptive?: boolean }) {
+  const [attempt, setAttempt] = useState(0)
   const [failed, setFailed] = useState(false)
-  useEffect(() => setFailed(false), [book.coverUrl])
-  return book.coverUrl && !failed
-    ? <img src={book.coverUrl} alt={descriptive ? `Обложка: ${book.title}` : ''} onError={() => setFailed(true)} />
+  const timer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  useEffect(() => {
+    setAttempt(0); setFailed(false)
+    return () => { if (timer.current) clearTimeout(timer.current) }
+  }, [book.coverUrl])
+  const imageUrl = book.coverUrl && attempt ? `${book.coverUrl}${book.coverUrl.includes('?') ? '&' : '?'}resharium_retry=${attempt}` : book.coverUrl
+  const retry = () => {
+    if (timer.current) clearTimeout(timer.current)
+    if (attempt >= 3) { setFailed(true); return }
+    timer.current = setTimeout(() => setAttempt((value) => value + 1), [650, 1300, 2600][attempt])
+  }
+  return imageUrl && !failed
+    ? <img key={imageUrl} src={imageUrl} alt={descriptive ? `Обложка: ${book.title}` : ''} onError={retry} />
     : <><span className="cover-grade">{book.grade}</span><Icon name="auto_stories" /><small>{book.grade} класс</small><b>{book.title}</b></>
 }
 
@@ -51,17 +62,6 @@ export function Brand({ compact = false }: { compact?: boolean }) {
   )
 }
 
-export function LaunchIntro({ leaving = false }: { leaving?: boolean }) {
-  return <div className={`launch-intro${leaving ? ' leaving' : ''}`} aria-hidden="true">
-    <div className="launch-aurora one" /><div className="launch-aurora two" />
-    <div className="launch-rings"><i /><i /><i /></div>
-    <div className="launch-logo"><Icon name="auto_stories" /><span /></div>
-    <div className="launch-title">Решариум</div>
-    <div className="launch-caption">Всё получится</div>
-    <div className="launch-line"><span /></div>
-  </div>
-}
-
 export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
   view: View
   onView: (view: View) => void
@@ -75,7 +75,6 @@ export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
     { id: 'favorites' as const, icon: 'bookmark', label: 'Избранное' },
     { id: 'recent' as const, icon: 'history', label: 'Недавнее' },
     { id: 'collections' as const, icon: 'folder_special', label: 'Мои подборки' },
-    { id: 'schedule' as const, icon: 'calendar_month', label: 'Расписание' },
   ]
   if (isAdmin) nav.push({ id: 'moderation', icon: 'fact_check', label: 'Модерация' })
   return (
@@ -99,10 +98,11 @@ export function Sidebar({ view, onView, onAdd, user, isAdmin }: {
   )
 }
 
-export function Topbar({ query, setQuery, onAuth, onSettings }: {
+export function Topbar({ query, setQuery, user, onProfile, onSettings }: {
   query: string
   setQuery: (value: string) => void
-  onAuth: () => void
+  user: User | null
+  onProfile: () => void
   onSettings: () => void
 }) {
   return (
@@ -112,7 +112,7 @@ export function Topbar({ query, setQuery, onAuth, onSettings }: {
         <input value={query} onChange={(event) => setQuery(event.target.value)} placeholder="Учебник, автор, предмет или задание..." />
       </label>
       <button className="icon-btn" aria-label="Настройки" onClick={onSettings} title="Настройки"><Icon name="settings" /></button>
-      <button className="icon-btn" aria-label="Аккаунт" onClick={onAuth} title="Аккаунт"><Icon name="account_circle" /></button>
+      <button className="icon-btn profile-entry" aria-label="Профиль" onClick={onProfile} title="Профиль"><UserAvatar user={user} className="topbar-avatar" /></button>
     </header>
   )
 }
@@ -245,92 +245,6 @@ export function BookGrid({ books, favorites, sourceCounts, onFavorite, onOpen, t
   )
 }
 
-export function SchedulePage({ schedule, books, favorites, sourceCounts, onSave, onFavorite, onOpen }: {
-  schedule: SchoolSchedule | null
-  books: Book[]
-  favorites: string[]
-  sourceCounts: Record<string, number>
-  onSave: (schedule: SchoolSchedule) => void
-  onFavorite: (id: string) => void
-  onOpen: (book: Book, origin: BookOpenOrigin) => void
-}) {
-  const [selectedDay, setSelectedDay] = useState<ScheduleDayId>(currentScheduleDay)
-  const [editorOpen, setEditorOpen] = useState(!schedule)
-  const [grade, setGrade] = useState(schedule?.grade || 7)
-  const [rawText, setRawText] = useState(schedule?.rawText || '')
-  const [ocrProgress, setOcrProgress] = useState<number | null>(null)
-  const [error, setError] = useState('')
-  const dayBooks = useMemo(() => schedule ? booksForDay(schedule, selectedDay, books) : [], [books, schedule, selectedDay])
-  const lessons = schedule?.days[selectedDay] || []
-
-  async function readScheduleFile(event: ChangeEvent<HTMLInputElement>) {
-    const file = event.target.files?.[0]
-    event.target.value = ''
-    if (!file) return
-    setError('')
-    if (file.type.startsWith('text/') || /\.(txt|csv)$/i.test(file.name)) {
-      setRawText(await file.text())
-      setEditorOpen(true)
-      return
-    }
-    setOcrProgress(0)
-    try {
-      const { createWorker } = await import('tesseract.js')
-      const worker = await createWorker(['rus', 'bel'], undefined, {
-        logger: (message) => {
-          if (message.status === 'recognizing text') setOcrProgress(Math.round((message.progress || 0) * 100))
-        },
-      })
-      try {
-        const result = await worker.recognize(file)
-        setRawText(result.data.text)
-        setEditorOpen(true)
-      } finally {
-        await worker.terminate()
-      }
-    } catch {
-      setError('Не удалось распознать изображение. Вставьте расписание текстом и сохраните.')
-    } finally {
-      setOcrProgress(null)
-    }
-  }
-
-  function save() {
-    const parsed = parseSchedule(rawText, grade)
-    if (!SCHEDULE_DAYS.some(({ id }) => parsed.days[id].length)) {
-      setError('Не найдены дни недели. Добавьте названия дней и уроки каждый с новой строки.')
-      return
-    }
-    onSave(parsed)
-    setEditorOpen(false)
-    setError('')
-  }
-
-  return <section className="schedule-page">
-    <div className="schedule-hero">
-      <div><span className="eyebrow">Учебный день</span><h1>Моё расписание</h1><p>Загрузите фото или вставьте текст — Решариум подберёт разделы учебников для уроков выбранного дня.</p></div>
-      <div className="schedule-actions">
-        <label className="soft-btn file-button"><Icon name="upload_file" />{ocrProgress === null ? 'Загрузить расписание' : `Распознаём ${ocrProgress}%`}<input type="file" accept="image/*,.txt,.csv,text/plain,text/csv" disabled={ocrProgress !== null} onChange={(event) => void readScheduleFile(event)} /></label>
-        {schedule && <button className="soft-btn" onClick={() => setEditorOpen((value) => !value)}><Icon name="stylus" />Изменить</button>}
-      </div>
-    </div>
-    {editorOpen && <div className="schedule-editor">
-      <div className="schedule-editor-head"><div><h2>Проверьте расписание</h2><p>После распознавания исправьте возможные ошибки перед сохранением.</p></div><label>Класс<select value={grade} onChange={(event) => setGrade(Number(event.target.value))}>{Array.from({ length: 11 }, (_, index) => index + 1).map((value) => <option key={value} value={value}>{value}</option>)}</select></label></div>
-      <textarea value={rawText} onChange={(event) => setRawText(event.target.value)} placeholder={'Понедельник\n1. Математика\n2. Русский язык\n\nВторник\n1. Физика'} />
-      {error && <p className="form-error">{error}</p>}
-      <div className="schedule-save"><small>Поддерживаются русские и белорусские названия дней и предметов.</small><button className="primary" onClick={save}><Icon name="save" />Сохранить</button></div>
-    </div>}
-    {schedule && <>
-      <div className="day-tabs" role="tablist" aria-label="День недели">{SCHEDULE_DAYS.map((day) => <button key={day.id} role="tab" aria-selected={selectedDay === day.id} className={selectedDay === day.id ? 'active' : ''} onClick={() => setSelectedDay(day.id)}><span>{day.short}</span><b>{day.label}</b></button>)}</div>
-      <div className="lesson-strip">{lessons.length ? lessons.map((lesson, index) => {
-        const matched = subjectsForLesson(lesson)
-        return <article key={`${lesson}-${index}`}><span>{index + 1}</span><div><b>{lesson}</b><small>{matched.length ? matched.join(', ') : 'Для этого урока раздел учебника не найден'}</small></div></article>
-      }) : <EmptyState title="Уроков нет" text="Добавьте уроки этого дня в расписание." />}</div>
-      <BookGrid books={dayBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={onFavorite} onOpen={onOpen} title={`Учебники на ${SCHEDULE_DAYS.find((day) => day.id === selectedDay)?.label.toLowerCase()}`} />
-    </>}
-  </section>
-}
-
 export function EmptyState({ title, text }: { title: string; text: string }) {
   return <div className="empty"><span><Icon name="search_off" /></span><h3>{title}</h3><p>{text}</p></div>
 }
@@ -351,17 +265,16 @@ export function RecentPage({ visits, books, onOpenBook, onOpenSolution, onClear 
   })
   const openVisit = (visit: RecentVisit, book: Book, card: HTMLElement) => {
     if (visit.kind === 'solution' && visit.url) return onOpenSolution(visit)
-    const bounds = card.querySelector('.recent-cover')?.getBoundingClientRect()
+    const bounds = card.querySelector('.book-cover')?.getBoundingClientRect()
     onOpenBook(book, bounds
       ? { left: bounds.left, top: bounds.top, width: bounds.width, height: bounds.height }
       : { left: window.innerWidth / 2, top: window.innerHeight / 2, width: 1, height: 1 })
   }
   return <section className="recent-page">
-    <div className="recent-heading"><div><span className="eyebrow">История</span><h1>Недавнее</h1><p>Последние открытые учебники и страницы решений хранятся на этом устройстве.</p></div>{visibleVisits.length > 0 && <button className="soft-btn danger" onClick={onClear}><Icon name="delete" />Очистить историю</button>}</div>
-    {visibleVisits.length > 0 ? <div className="recent-list">{visibleVisits.map(({ visit, book }) => <article className="recent-card" key={visit.id} role="button" tabIndex={0} aria-label={`Открыть ${visit.task || book.title}`} onClick={(event) => openVisit(visit, book, event.currentTarget)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openVisit(visit, book, event.currentTarget) } }}>
-      <div className="book-cover recent-cover" style={bookCoverStyle(book)}><BookCoverContent book={book} /></div>
-      <div className="recent-copy"><span className={`recent-kind ${visit.kind}`}><Icon name={visit.kind === 'solution' ? 'open_in_new' : 'menu_book'} />{visit.kind === 'solution' ? 'Решение' : 'Учебник'}</span><h3>{visit.task || book.title}</h3><p>{book.subject} · {book.grade} класс</p><small>{visit.provider ? `${visit.provider} · ` : ''}{recentDateFormat.format(new Date(visit.openedAt))}</small></div>
-      <Icon name="arrow_forward" />
+    <div className="recent-heading"><div><span className="eyebrow">История</span><h1>Недавнее</h1><p>После входа история синхронизируется между вашими устройствами.</p></div>{visibleVisits.length > 0 && <button className="soft-btn danger" onClick={onClear}><Icon name="delete" />Очистить историю</button>}</div>
+    {visibleVisits.length > 0 ? <div className="recent-list book-grid">{visibleVisits.map(({ visit, book }) => <article className="book-card recent-card" key={visit.id} role="button" tabIndex={0} aria-label={`Открыть ${visit.task || book.title}`} onClick={(event) => openVisit(visit, book, event.currentTarget)} onKeyDown={(event) => { if (event.key === 'Enter' || event.key === ' ') { event.preventDefault(); openVisit(visit, book, event.currentTarget) } }}>
+      <div className="book-cover" style={bookCoverStyle(book)}><BookCoverContent book={book} /></div>
+      <div className="book-info recent-copy"><span className={`recent-kind ${visit.kind}`}><Icon name={visit.kind === 'solution' ? 'open_in_new' : 'menu_book'} />{visit.kind === 'solution' ? 'Решение' : 'Учебник'}</span><h3>{visit.task || book.title}</h3><p>{book.subject} · {book.grade} класс</p><footer><span>{visit.provider ? `${visit.provider} · ` : ''}{recentDateFormat.format(new Date(visit.openedAt))}</span><button aria-label={`Открыть ${visit.task || book.title}`}><Icon name="arrow_forward" /></button></footer></div>
     </article>)}</div> : <EmptyState title="История пока пуста" text="Откройте учебник или страницу решения — она появится здесь." />}
   </section>
 }
@@ -373,14 +286,12 @@ const themeOptions: Array<{ id: AppTheme; name: string; colors: [string, string]
   { id: 'sunset', name: 'Закат', colors: ['#f06e9e', '#ff9b59'] },
 ]
 
-export function SettingsPage({ preferences, isDesktop, isAndroid, onChange, onShortcut, onShortcutCapture, onQuickAccess }: {
+export function SettingsPage({ preferences, isDesktop, onChange, onShortcut, onShortcutCapture }: {
   preferences: AppPreferences
   isDesktop: boolean
-  isAndroid: boolean
   onChange: (changes: Partial<AppPreferences>) => void
   onShortcut: (shortcut: string) => Promise<string | null>
   onShortcutCapture: (active: boolean) => Promise<void>
-  onQuickAccess: () => void
 }) {
   const [recording, setRecording] = useState(false)
   const [shortcutError, setShortcutError] = useState('')
@@ -445,7 +356,6 @@ export function SettingsPage({ preferences, isDesktop, isAndroid, onChange, onSh
     <div className="settings-groups">
       <section className="settings-card"><div className="settings-card-title"><span><Icon name="palette" /></span><div><h2>Тема оформления</h2><p>Выберите цвет стекла и акцентов интерфейса.</p></div></div><div className="theme-picker">{themeOptions.map((theme) => <button key={theme.id} aria-pressed={preferences.theme === theme.id} className={preferences.theme === theme.id ? 'selected' : ''} onClick={() => onChange({ theme: theme.id })}><span className="theme-preview" style={{ '--theme-a': theme.colors[0], '--theme-b': theme.colors[1] } as React.CSSProperties} /><span>{theme.name}</span>{preferences.theme === theme.id && <Icon name="check_circle" />}</button>)}</div></section>
       <section className="settings-card"><div className="setting-row"><span className="setting-icon"><Icon name="orbit" /></span><div><h2>Анимации</h2><p>Плавные переходы, блики и перелёт обложек.</p></div><button className={`switch${preferences.animationsEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.animationsEnabled} aria-label="Анимации" onClick={() => onChange({ animationsEnabled: !preferences.animationsEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon"><Icon name="volume_up" /></span><div><h2>Спокойная музыка</h2><p>Тихий фоновый эмбиент во время занятий.</p>{preferences.musicEnabled && <input className="volume-slider" aria-label="Громкость музыки" type="range" min="0" max="0.35" step="0.01" value={preferences.musicVolume} onChange={(event) => onChange({ musicVolume: Number(event.target.value) })} />}</div><button className={`switch${preferences.musicEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.musicEnabled} aria-label="Спокойная музыка" onClick={() => onChange({ musicEnabled: !preferences.musicEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon secure"><Icon name="shield" /></span><div><h2>Блокировка рекламы</h2><p>Фильтрует рекламу и трекеры во встроенном просмотрщике.</p></div><button className={`switch${preferences.adBlockEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.adBlockEnabled} aria-label="Блокировка рекламы" onClick={() => onChange({ adBlockEnabled: !preferences.adBlockEnabled })}><span /></button></div></section>
-      {isAndroid && <section className="settings-card"><div className="settings-card-title"><span><Icon name="bolt" /></span><div><h2>Быстрый доступ</h2><p>Добавьте Решариум в панель быстрых настроек Android.</p></div></div><button className="soft-btn quick-tile-btn" onClick={onQuickAccess}><Icon name="add" />Добавить кнопку</button></section>}
       {isDesktop && <section className="settings-card"><div className="settings-card-title"><span><Icon name="keyboard" /></span><div><h2>Быстрое сворачивание</h2><p>{isModifierOnlyAccelerator(preferences.minimizeShortcut) ? 'Одиночная клавиша работает, пока окно Решариума активно.' : 'Сочетание работает глобально, даже когда открыто другое окно.'}</p></div></div><div className={`shortcut-recorder${recording ? ' recording' : ''}`}><div><small>Текущая клавиша</small><kbd>{recording ? 'Нажмите клавиши…' : displayAccelerator(preferences.minimizeShortcut)}</kbd></div><button className="soft-btn" onClick={beginCapture}>{recording ? 'Слушаю…' : 'Изменить'}</button><button className="ghost" onClick={() => void onShortcut('CommandOrControl+Shift+M').then((error) => setShortcutError(error || ''))}>По умолчанию</button></div>{shortcutError && <p className="setting-error">{shortcutError}</p>}</section>}
     </div>
   </section>
@@ -691,44 +601,47 @@ export function ModerationPage({ solutions, books, onModerate, onDelete, onOpenL
 
 export function ProfilePage({ user, favorites, solutions, submitted, onAuth, onDelete }: { user: User | null; favorites: number; solutions: number; submitted: SolutionLink[]; onAuth: () => void; onDelete: (id: string) => void }) {
   const name = user?.user_metadata?.full_name || 'Гостевой профиль'
-  return <section className="profile-page"><div className="profile-banner"><UserAvatar user={user} className="profile-avatar" /><div><span className="eyebrow">Мой профиль</span><h1>{name}</h1><p>{user?.email || 'Работаете локально на этом компьютере'}</p></div><button className="soft-btn" onClick={onAuth}><Icon name={user ? 'manage_accounts' : 'login'} />{user ? 'Управление' : 'Войти'}</button></div><div className="stat-grid"><div><Icon name="bookmark" /><b>{favorites}</b><span>В избранном</span></div><div><Icon name="add_link" /><b>{solutions}</b><span>Отправлено ссылок</span></div><div><Icon name="cloud_sync" /><b>{user ? 'On' : 'Off'}</b><span>Синхронизация</span></div></div>{user && submitted.length > 0 && <div className="submitted-links"><div className="history-heading"><h2>Мои ссылки</h2><span>{submitted.length}</span></div>{submitted.map((item) => <article key={item.id}><ProviderLogo provider={item.provider} url={item.url} /><span className={`status-badge ${item.status || 'pending'}`}>{item.status === 'approved' ? 'Одобрено' : item.status === 'rejected' ? 'Отклонено' : 'На проверке'}</span><div className="submitted-link-copy"><b>{item.task} · {item.provider}</b>{item.status === 'rejected' && item.rejection_reason && <small>Причина: {item.rejection_reason}</small>}</div><button className="delete-link-btn compact" title="Удалить ссылку" aria-label={`Удалить ссылку ${item.task}`} onClick={() => onDelete(item.id)}><Icon name="delete" /></button></article>)}</div>}</section>
+  return <section className="profile-page"><div className="profile-banner"><UserAvatar user={user} className="profile-avatar" /><div><span className="eyebrow">Мой профиль</span><h1>{name}</h1><p>{user?.email || 'Работаете локально на этом компьютере'}</p></div><button className="soft-btn" onClick={onAuth}><Icon name={user ? 'manage_accounts' : 'login'} />{user ? 'Управление' : 'Войти'}</button></div><div className="stat-grid"><div><Icon name="bookmark" /><b>{favorites}</b><span>В избранном</span></div><div><Icon name="add_link" /><b>{solutions}</b><span>Отправлено ссылок</span></div></div>{user && submitted.length > 0 && <div className="submitted-links"><div className="history-heading"><h2>Мои ссылки</h2><span>{submitted.length}</span></div>{submitted.map((item) => <article key={item.id}><ProviderLogo provider={item.provider} url={item.url} /><span className={`status-badge ${item.status || 'pending'}`}>{item.status === 'approved' ? 'Одобрено' : item.status === 'rejected' ? 'Отклонено' : 'На проверке'}</span><div className="submitted-link-copy"><b>{item.task} · {item.provider}</b>{item.status === 'rejected' && item.rejection_reason && <small>Причина: {item.rejection_reason}</small>}</div><button className="delete-link-btn compact" title="Удалить ссылку" aria-label={`Удалить ссылку ${item.task}`} onClick={() => onDelete(item.id)}><Icon name="delete" /></button></article>)}</div>}</section>
 }
 
-export function UpdateControl() {
-  const [state, setState] = useState<UpdateState | null>(null)
+const UPDATE_POSTPONED_KEY = 'resharium.update-postponed:v1'
+
+export function UpdatePrompt({ onDownload }: { onDownload: () => void }) {
+  const [release, setRelease] = useState<GitHubRelease | null>(null)
 
   useEffect(() => {
-    const desktop = window.desktop
-    if (desktop) {
-      void desktop.getUpdateState().then(setState)
-      return desktop.onUpdateState(setState)
-    }
-    if (isNativeAndroid) {
-      void getAndroidUpdateState().then(setState).then(() => checkAndroidUpdate().then(setState))
-    }
+    if (!window.desktop && !isNativeAndroid) return
+    let cancelled = false
+    const timer = window.setTimeout(async () => {
+      try {
+        const currentVersion = window.desktop ? await window.desktop.getAppVersion() : await getAndroidAppVersion()
+        const available = await latestReleaseFor(currentVersion)
+        if (!available || cancelled) return
+        const postponed = JSON.parse(localStorage.getItem(UPDATE_POSTPONED_KEY) || 'null') as { version?: string; until?: number } | null
+        if (postponed?.version === normalizeVersion(available.tag_name) && Number(postponed.until) > Date.now()) return
+        setRelease(available)
+      } catch { /* A network error must never block app startup. */ }
+    }, 700)
+    return () => { cancelled = true; window.clearTimeout(timer) }
   }, [])
 
-  if ((!window.desktop && !isNativeAndroid) || !state) return null
-  const busy = state.status === 'checking' || state.status === 'downloading'
-  const label = state.status === 'checking' ? 'Проверка…'
-    : state.status === 'downloading' ? `Загрузка ${state.progress || 0}%`
-      : state.status === 'available' ? `Скачать ${state.availableVersion}`
-        : state.status === 'downloaded' ? `Установить ${state.availableVersion}`
-        : state.status === 'not-available' ? `Версия ${state.currentVersion} актуальна`
-          : state.status === 'error' ? 'Повторить проверку'
-            : `Версия ${state.currentVersion}`
-  const icon = busy ? 'progress_activity' : state.status === 'downloaded' ? 'restart_alt' : state.status === 'available' ? 'download' : state.status === 'not-available' ? 'check_circle' : 'system_update'
-
-  const activate = () => {
-    if (isNativeAndroid) {
-      if (state.status === 'available') void installAndroidUpdate()
-      else { setState({ ...state, status: 'checking' }); void checkAndroidUpdate().then(setState) }
-    } else if (state.status === 'available') void window.desktop?.downloadUpdate()
-    else if (state.status === 'downloaded') void window.desktop?.installUpdate()
-    else void window.desktop?.checkForUpdates()
+  if (!release) return null
+  const version = normalizeVersion(release.tag_name)
+  const postpone = () => {
+    localStorage.setItem(UPDATE_POSTPONED_KEY, JSON.stringify({ version, until: Date.now() + 24 * 60 * 60 * 1000 }))
+    setRelease(null)
   }
-
-  return <button className={`update-control ${state.status}`} type="button" disabled={busy} title={state.message || 'Проверить обновления'} onClick={activate}><Icon name={icon} />{label}</button>
+  const changelog = release.body?.trim() || `Исправления и улучшения версии ${version}.`
+  return <div className="overlay update-overlay" role="presentation" onMouseDown={(event) => event.target === event.currentTarget && postpone()}>
+    <section className="update-modal" role="dialog" aria-modal="true" aria-labelledby="update-title">
+      <button className="icon-btn update-close" aria-label="Отложить обновление" onClick={postpone}><Icon name="close" /></button>
+      <span className="update-icon"><Icon name="system_update" /></span>
+      <span className="eyebrow">Доступна новая версия</span>
+      <h2 id="update-title">Решариум {version}</h2>
+      <div className="update-changelog"><h3>Что изменилось</h3><p>{changelog}</p></div>
+      <div className="update-actions"><button className="ghost" onClick={postpone}>Отложить</button><button className="primary" onClick={() => { setRelease(null); onDownload() }}><Icon name="download" />Скачать</button></div>
+    </section>
+  </div>
 }
 
 export function Toast({ message, onDone }: { message: string; onDone: () => void }) {
@@ -796,7 +709,7 @@ export function SourceBrowser({ url, adBlockEnabled, onClose, onExternal }: { ur
       finishTimer = window.setTimeout(() => setLoading(false), 15_000)
     }
     const hideAdSlots = () => {
-      if (adBlockEnabled) void view.insertCSS?.('.adsbygoogle,[id^="yandex_rtb"],.adfox,[data-ad],iframe[src*="doubleclick"],iframe[src*="googlesyndication"]{display:none!important;visibility:hidden!important;max-height:0!important}')
+      if (adBlockEnabled) void view.insertCSS?.('.adsbygoogle,[id^="yandex_rtb"],.adfox,[data-ad],[data-ad-slot],[class*="advert"],[id*="advert"],iframe[src*="doubleclick"],iframe[src*="googlesyndication"],iframe[src*="play.pm.by"]{display:none!important;visibility:hidden!important;max-height:0!important}')
     }
     const stop = () => {
       window.clearTimeout(finishTimer)

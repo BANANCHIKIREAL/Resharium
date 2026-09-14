@@ -1,10 +1,10 @@
 {
   "name": "resharium",
-  "version": "0.5.3",
+  "version": "0.6.0",
   "private": true,
   "type": "module",
   "description": "Современный каталог ссылок на решения школьных заданий",
-  "author": "Resharium",
+  "author": "BANANCHIKIREAL",
   "homepage": "https://github.com/BANANCHIKIREAL/Resharium",
   "repository": {
     "type": "git",
@@ -25,7 +25,7 @@
     "android:apk": "npm run android:sync && cd android && gradlew.bat assembleDebug",
     "android:apk:release": "npm run android:sync && cd android && gradlew.bat assembleRelease",
     "verify:mobile": "node scripts/verify-mobile.mjs",
-    "verify:schedule": "node scripts/verify-schedule-ocr.mjs",
+    "verify:updater": "node scripts/verify-updater.mjs",
     "verify:visual": "node scripts/verify-visual-refresh.mjs",
     "preview": "vite preview",
     "test": "vitest run"
@@ -35,12 +35,10 @@
     "@capacitor/browser": "^8.0.4",
     "@capacitor/core": "^8.4.3",
     "@supabase/supabase-js": "2.114.0",
-    "electron-updater": "^6.8.9",
     "lucide": "1.41.0",
     "morphicons": "1.7.1",
     "react": "19.2.8",
-    "react-dom": "19.2.8",
-    "tesseract.js": "^7.0.0"
+    "react-dom": "19.2.8"
   },
   "devDependencies": {
     "@capacitor/android": "^8.4.3",
@@ -54,6 +52,7 @@
     "electron-builder": "26.15.3",
     "playwright": "1.62.1",
     "png-to-ico": "3.0.1",
+    "pngjs": "^7.0.0",
     "typescript": "5.9.3",
     "vite": "8.2.2",
     "vitest": "4.1.11",
@@ -86,6 +85,7 @@
       "icon": "assets/app-icon.ico",
       "target": "nsis"
     },
+    "copyright": "Copyright © 2026 BANANCHIKIREAL",
     "nsis": {
       "include": "build/installer.nsh",
       "oneClick": false,

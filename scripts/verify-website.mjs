@@ -29,11 +29,9 @@ try {
     await page.screenshot({ path: `screenshots/website-${width}.png`, fullPage: true })
     if (await page.evaluate(() => document.documentElement.scrollWidth > innerWidth)) console.log(await page.evaluate(() => [...document.querySelectorAll('body *')].filter(el => el.getBoundingClientRect().right > innerWidth + 1).map(el => ({ tag: el.tagName, class: el.className, right: el.getBoundingClientRect().right })).slice(0, 15)))
     assert.equal(await page.evaluate(() => document.documentElement.scrollWidth > innerWidth), false, `Overflow at ${width}`)
-    await page.locator('[data-day="1"]').click()
-    assert.equal(await page.locator('.week-lessons b').first().textContent(), 'Химия')
-    const swatch = page.locator('[data-theme]').last()
-    await swatch.click()
-    assert.equal(await page.locator('[data-preview-theme]').getAttribute('data-preview-theme'), await swatch.getAttribute('data-theme'))
+    await page.locator('.product-shot img').waitFor()
+    assert.equal(await page.locator('.product-shot img').evaluate((image) => image.complete && image.naturalWidth > 1000), true)
+    assert.equal(await page.locator('text=Расписание').count(), 0)
     for (const platform of ['windows', 'android']) {
       const href = await page.locator(`[data-download="${platform}"]`).getAttribute('href')
       assert.match(href, /^https:\/\/github.com\/BANANCHIKIREAL\/Resharium\/releases\/download\//)
@@ -45,7 +43,7 @@ try {
     await page.screenshot({ path: `screenshots/website-${width}.png`, fullPage: true })
     assert.deepEqual(errors, [])
     await page.close()
-    console.log(`PASS ${width}px: layout, schedule, themes, downloads, FAQ, no JS errors; API failure fallback`)
+    console.log(`PASS ${width}px: layout, screenshot, downloads, FAQ, no JS errors; API failure fallback`)
   }
   const page = await browser.newPage({ javaScriptEnabled: false })
   await page.goto(url)

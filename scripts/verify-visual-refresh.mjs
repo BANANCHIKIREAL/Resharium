@@ -12,6 +12,8 @@ const errors = []
 async function verify(name, viewport) {
   const page = await browser.newPage({ viewport, deviceScaleFactor: 1, hasTouch: name === 'mobile' })
   page.setDefaultTimeout(10_000)
+  const pixel = Buffer.from('iVBORw0KGgoAAAANSUhEUgAAAAIAAAACCAQAAABFaP0WAAAADElEQVR42mNk+A8EAAn7A/0Rx0YAAAAASUVORK5CYII=', 'base64')
+  await page.route(/(resheba\.top\/_pu\/2\/36771776\.jpg|gdz\.by\/media\/english_07\/demchenko-rt23\/covers\/cover2\.webp)/, (route) => route.fulfill({ status: 200, contentType: 'image/png', body: pixel }))
   if (name === 'desktop') {
     await page.addInitScript(() => {
       window.desktop = {
@@ -19,11 +21,7 @@ async function verify(name, viewport) {
         getPendingAuthUrl: async () => null,
         clearPendingAuthUrl: async () => undefined,
         onAuthCallback: () => () => undefined,
-        getUpdateState: async () => ({ status: 'idle', currentVersion: '1.5.2' }),
-        checkForUpdates: async () => ({ status: 'not-available', currentVersion: '1.5.2' }),
-        downloadUpdate: async () => false,
-        installUpdate: async () => false,
-        onUpdateState: () => () => undefined,
+        getAppVersion: async () => '0.6.0',
         getDesktopSettings: async () => ({ minimizeShortcut: 'CommandOrControl+Shift+M', adBlockEnabled: true }),
         setMinimizeShortcut: async (shortcut) => ({ ok: true, shortcut }),
         setAdBlockEnabled: async (enabled) => enabled,
@@ -37,21 +35,16 @@ async function verify(name, viewport) {
   })
 
   await page.goto(baseUrl, { waitUntil: 'domcontentloaded' })
-  await page.locator('.launch-intro').waitFor()
-  await page.waitForTimeout(520)
-  await page.locator('.launch-intro').screenshot({ path: resolve(screenshots, `launch-${name}.png`) })
-  await page.locator('.launch-intro').waitFor({ state: 'detached' })
   await page.locator('.book-card').first().waitFor()
+  if (await page.locator('.launch-intro').count()) throw new Error(`${name}: launch animation was not removed`)
   if (!(await page.locator('body').innerText()).trim()) throw new Error(`${name}: empty page`)
   if (await page.locator('.vite-error-overlay').count()) throw new Error(`${name}: Vite error overlay`)
   const originalCover = page.locator('[data-book-id="resheba-460d25eaefa15b39"] .book-cover img')
   await originalCover.waitFor()
   if (!(await originalCover.getAttribute('src'))?.includes('resheba.top/_pu/2/36771776.jpg')) throw new Error(`${name}: genuine source cover is missing`)
-  await page.waitForFunction(() => document.querySelector('[data-book-id="resheba-460d25eaefa15b39"] .book-cover img')?.naturalWidth > 0)
   const upgradedCover = page.locator('[data-book-id="resheba-3264524c9030b0b3"] .book-cover img')
   await upgradedCover.waitFor()
   if (!(await upgradedCover.getAttribute('src'))?.includes('gdz.by/media/english_07/demchenko-rt23/covers/cover2.webp')) throw new Error(`${name}: verified sharp cover is missing`)
-  await page.waitForFunction(() => document.querySelector('[data-book-id="resheba-3264524c9030b0b3"] .book-cover img')?.naturalWidth > 0)
   await page.locator('[data-book-id="resheba-460d25eaefa15b39"]').screenshot({ path: resolve(screenshots, `genuine-workbook-${name}.png`) })
   await page.locator('[data-book-id="resheba-3264524c9030b0b3"]').screenshot({ path: resolve(screenshots, `sharp-workbook-${name}.png`) })
   if (!(await page.locator('[data-book-id="resheba-1c15ec57ae4cd5d8"] .book-cover img').count())) {
@@ -69,6 +62,10 @@ async function verify(name, viewport) {
     await page.screenshot({ path: resolve(screenshots, 'settings-desktop.png'), fullPage: true })
     await page.getByRole('button', { name: 'Главная', exact: true }).click()
     await page.locator('.book-card').first().waitFor()
+    await page.getByRole('button', { name: 'Профиль', exact: true }).click()
+    await page.locator('.profile-page').waitFor()
+    if (!(await page.locator('.profile-entry .avatar').count())) throw new Error('desktop: profile button has no avatar')
+    await page.getByRole('button', { name: 'Главная', exact: true }).click()
   }
   if (name === 'mobile') {
     const collectionsButton = page.getByRole('button', { name: 'Мои подборки', exact: true })
@@ -97,6 +94,7 @@ async function verify(name, viewport) {
     await page.locator('.recent-card').first().waitFor()
     await page.waitForTimeout(300)
     if ((await page.locator('.recent-card').count()) !== 1) throw new Error('mobile: opened book was not saved once in recent history')
+    if (!(await page.locator('.recent-card.book-card .book-cover').count())) throw new Error('mobile: recent card does not use the default book-card layout')
     if ((await page.locator('.sidebar nav button.active').getAttribute('aria-label')) !== 'Недавнее') throw new Error('mobile: recent tab did not become active')
     if (!(await page.locator('.sidebar nav button.active .ui-icon[data-icon="history"].filled').count())) throw new Error('mobile: recent tab icon has no selected Morphicons state')
     if ((await page.locator('.page').evaluate((element) => element.scrollTop)) !== 0) throw new Error('mobile: recent page did not reset scroll position')

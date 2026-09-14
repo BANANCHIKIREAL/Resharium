@@ -24,32 +24,6 @@ visual.addEventListener('pointerleave', () => {
   scene.style.setProperty('--rotate-y', '0deg')
 })
 
-const sampleDays = [
-  ['Математика', 'Русский язык', 'Физика'],
-  ['Химия', 'Английский язык', 'Биология'],
-  ['Беларуская мова', 'Геометрия', 'География'],
-  ['Физика', 'Информатика', 'История Беларуси'],
-  ['Математика', 'Литература', 'Английский язык'],
-]
-document.querySelectorAll('[data-day]').forEach((button) => {
-  button.addEventListener('click', () => {
-    document.querySelectorAll('[data-day]').forEach((tab) => {
-      tab.classList.toggle('active', tab === button)
-      tab.setAttribute('aria-pressed', String(tab === button))
-    })
-    document.querySelectorAll('.week-lessons b').forEach((label, index) => { label.textContent = sampleDays[Number(button.dataset.day)][index] })
-  })
-})
-document.querySelectorAll('[data-theme]').forEach((button) => {
-  button.addEventListener('click', () => {
-    document.querySelector('[data-preview-theme]').dataset.previewTheme = button.dataset.theme
-    document.querySelectorAll('[data-theme]').forEach((swatch) => {
-      swatch.classList.toggle('active', swatch === button)
-      swatch.setAttribute('aria-pressed', String(swatch === button))
-    })
-  })
-})
-
 // The generated page already has working release links, including with JavaScript disabled.
 // Refresh when possible so a newly published version is available before Pages finishes deploying.
 const releaseBase = 'https://github.com/BANANCHIKIREAL/Resharium/releases/'

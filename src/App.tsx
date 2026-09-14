@@ -1,13 +1,12 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { Session, SupabaseClient, User } from '@supabase/supabase-js'
 import { books as bundledBooks, decorateBook, demoSolutions, providerSearchesFor } from './data'
-import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SchoolSchedule, SolutionLink, View } from './types'
+import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SolutionLink, View } from './types'
 import { createSupabase, getStoredSettings } from './lib/supabase'
-import { addRecentVisit, normalizeRecentVisits, type NewRecentVisit } from './lib/recent'
+import { addRecentVisit, mergeRecentVisits, normalizeRecentVisits, type NewRecentVisit } from './lib/recent'
 import { DEFAULT_PREFERENCES, normalizePreferences, type AppPreferences } from './lib/preferences'
-import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, LaunchIntro, ModerationPage, ProfilePage, RecentPage, SchedulePage, SettingsPage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdateControl } from './components'
+import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, ProfilePage, RecentPage, SettingsPage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdatePrompt } from './components'
 import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage, openNativeSourcePage, requestQuickSettingsTile } from './mobile'
-import { isValidSchedule } from './lib/schedule'
 import { setAmbientVolume, startAmbientMusic, stopAmbientMusic } from './lib/ambient-music'
 import { WebsitePromo, WEBSITE_URL } from './WebsitePromo'
 
@@ -17,7 +16,6 @@ const COLLECTIONS_KEY = 'resharium.collections'
 const RECENT_KEY = 'resharium.recent:v1'
 const PREFERENCES_KEY = 'resharium.preferences:v1'
 const QUICK_TILE_PROMPT_KEY = 'resharium.quick-tile-prompted:v1'
-const SCHEDULE_KEY = 'resharium.schedule:v1'
 
 function readJson<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || '') as T } catch { return fallback }
@@ -42,11 +40,6 @@ export default function App() {
   const [collections, setCollections] = useState<BookCollection[]>(() => readJson(COLLECTIONS_KEY, []))
   const [recentVisits, setRecentVisits] = useState<RecentVisit[]>(() => normalizeRecentVisits(readJson<unknown>(RECENT_KEY, [])))
   const [preferences, setPreferences] = useState<AppPreferences>(() => normalizePreferences(readJson<unknown>(PREFERENCES_KEY, DEFAULT_PREFERENCES)))
-  const [schedule, setSchedule] = useState<SchoolSchedule | null>(() => {
-    const stored = readJson<unknown>(SCHEDULE_KEY, null)
-    return isValidSchedule(stored) ? stored : null
-  })
-  const [launchPhase, setLaunchPhase] = useState<'visible' | 'leaving' | 'hidden'>(() => preferences.animationsEnabled ? 'visible' : 'hidden')
   const [activeCollectionId, setActiveCollectionId] = useState<string | null>(null)
   const [solutions, setSolutions] = useState<SolutionLink[]>(() => [...demoSolutions, ...readJson<SolutionLink[]>(LOCAL_SOLUTIONS_KEY, [])])
   const [settings] = useState(() => getStoredSettings())
@@ -132,18 +125,11 @@ export default function App() {
   useEffect(() => () => stopAmbientMusic(), [])
 
   useEffect(() => {
-    if (launchPhase === 'hidden') return
-    const leaveTimer = window.setTimeout(() => setLaunchPhase('leaving'), 900)
-    const hideTimer = window.setTimeout(() => setLaunchPhase('hidden'), 1200)
-    return () => { window.clearTimeout(leaveTimer); window.clearTimeout(hideTimer) }
-  }, [])
-
-  useEffect(() => {
     if (!isNativeAndroid || localStorage.getItem(QUICK_TILE_PROMPT_KEY)) return
     const timer = window.setTimeout(() => {
       localStorage.setItem(QUICK_TILE_PROMPT_KEY, '1')
       void requestQuickSettingsTile().catch(() => undefined)
-    }, 1350)
+    }, 250)
     return () => window.clearTimeout(timer)
   }, [])
 
@@ -263,6 +249,25 @@ export default function App() {
       document.removeEventListener('visibilitychange', onVisibility)
     }
   }, [client, user, books])
+
+  useEffect(() => {
+    if (!client || !user) return
+    let active = true
+    const syncRecent = async () => {
+      const local = normalizeRecentVisits(readJson<unknown>(RECENT_KEY, []))
+      const { data, error } = await client.from('recent_visits').select('visit_id,kind,book_key,url,provider,task,opened_at').eq('user_id', user.id).order('opened_at', { ascending: false }).limit(30)
+      if (!active || error) return
+      const remote = normalizeRecentVisits((data || []).map((row) => ({ id: row.visit_id, kind: row.kind, bookId: row.book_key, url: row.url || undefined, provider: row.provider || undefined, task: row.task || undefined, openedAt: row.opened_at })))
+      const merged = mergeRecentVisits(local, remote)
+      setRecentVisits(merged)
+      localStorage.setItem(RECENT_KEY, JSON.stringify(merged))
+      if (merged.length) await client.from('recent_visits').upsert(merged.map((visit) => ({ user_id: user.id, visit_id: visit.id, kind: visit.kind, book_key: visit.bookId, url: visit.url || null, provider: visit.provider || null, task: visit.task || null, opened_at: visit.openedAt })), { onConflict: 'user_id,visit_id' })
+    }
+    void syncRecent()
+    const onFocus = () => void syncRecent()
+    window.addEventListener('focus', onFocus)
+    return () => { active = false; window.removeEventListener('focus', onFocus) }
+  }, [client, user])
 
   useEffect(() => {
     let active = true
@@ -487,9 +492,11 @@ export default function App() {
     setRecentVisits((current) => {
       const next = addRecentVisit(current, visit)
       try { localStorage.setItem(RECENT_KEY, JSON.stringify(next)) } catch { /* History remains available for this session. */ }
+      const newest = next[0]
+      if (client && user && newest) void client.from('recent_visits').upsert({ user_id: user.id, visit_id: newest.id, kind: newest.kind, book_key: newest.bookId, url: newest.url || null, provider: newest.provider || null, task: newest.task || null, opened_at: newest.openedAt }, { onConflict: 'user_id,visit_id' })
       return next
     })
-  }, [])
+  }, [client, user])
 
   const openBook = useCallback((book: Book, origin: BookOpenOrigin) => {
     recordRecent({ kind: 'book', bookId: book.id })
@@ -512,6 +519,7 @@ export default function App() {
     if (!window.confirm('Очистить всю историю недавних открытий?')) return
     setRecentVisits([])
     try { localStorage.removeItem(RECENT_KEY) } catch { /* Ignore unavailable storage. */ }
+    if (client && user) void client.from('recent_visits').delete().eq('user_id', user.id)
     setToast('История очищена')
   }
 
@@ -527,34 +535,16 @@ export default function App() {
     else window.open(url, '_blank', 'noopener,noreferrer')
   }
 
-  async function addQuickAccess() {
-    try {
-      const result = await requestQuickSettingsTile()
-      if (result.added) setToast('Кнопка Решариума добавлена в быстрые настройки')
-      else if (!result.supported) setToast('Откройте панель управления, нажмите редактирование и перетащите плитку Решариума вручную')
-      else setToast('Добавление кнопки отменено')
-    } catch (error) {
-      setToast(error instanceof Error ? error.message : 'Не удалось добавить кнопку быстрого доступа')
-    }
-  }
-
-  function saveSchedule(next: SchoolSchedule) {
-    setSchedule(next)
-    try { localStorage.setItem(SCHEDULE_KEY, JSON.stringify(next)) } catch { /* Schedule remains active for this session. */ }
-    setToast('Расписание сохранено')
-  }
-
   const pageTitle = view === 'favorites' ? 'Избранные разделы' : view === 'catalog' ? 'Каталог классов и предметов' : query || subject || grade ? 'Результаты поиска' : 'Популярные разделы'
   const visibleBooks = view === 'home' && !query && !subject && !grade ? filteredBooks.filter((book) => book.popular) : filteredBooks
 
   return <div className="app-shell">
-    {launchPhase !== 'hidden' && <LaunchIntro leaving={launchPhase === 'leaving'} />}
     <div className="ambient-bg" aria-hidden="true"><span className="ambient-orb orb-violet" /><span className="ambient-orb orb-cyan" /><span className="ambient-orb orb-rose" /><span className="ambient-grid" /></div>
     <Sidebar view={view} onView={setView} onAdd={() => setShowAdd(true)} user={user} isAdmin={isAdmin} />
     <main className="main-area">
-      <Topbar query={query} setQuery={setQuery} onAuth={() => setShowAuth(true)} onSettings={() => setView('settings')} />
+      <Topbar query={query} setQuery={setQuery} user={user} onProfile={() => setView('profile')} onSettings={() => setView('settings')} />
       <div className="page" ref={pageRef}>
-        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} isAndroid={isNativeAndroid} onChange={updatePreferences} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} onQuickAccess={() => void addQuickAccess()} /> : view === 'schedule' ? <SchedulePage schedule={schedule} books={books} favorites={favorites} sourceCounts={sourceCounts} onSave={saveSchedule} onFavorite={toggleFavorite} onOpen={openBook} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
+        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} onChange={updatePreferences} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
           {view === 'home' && !query && !subject && !grade && <><Hero onCatalog={() => setView('catalog')} /><WebsitePromo onOpen={() => { void openExternal(WEBSITE_URL).catch(() => setToast('Не удалось открыть сайт. Попробуйте ещё раз.')) }} /></>}
           <section className="filter-section">
             <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><GradePicker grade={grade} onSelect={setGrade} /></div>
@@ -562,7 +552,7 @@ export default function App() {
           </section>
           <BookGrid books={visibleBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={toggleFavorite} onOpen={openBook} title={pageTitle} />
         </>}
-        <footer className="app-footer"><span>Решариум · каталог образовательных ссылок</span><UpdateControl /></footer>
+        <footer className="app-footer"><span>Решариум от BANANCHIKIREAL · каталог образовательных ссылок</span></footer>
       </div>
     </main>
     {selectedBook && <BookDrawer book={selectedBook} origin={bookOpenOrigin} solutions={publicSolutions.filter((item) => item.book_key === selectedBook.id)} onClose={closeBook} onAdd={() => setShowAdd(true)} onCollect={() => { setCollectionBook(selectedBook); setShowCollection(true) }} onOpenLink={openBookSolution} />}
@@ -570,6 +560,7 @@ export default function App() {
     {showAuth && <AuthModal connected={Boolean(client)} googleEnabled={googleEnabled} user={user} onGoogle={googleLogin} onEmail={emailAuth} onResend={resendConfirmation} onSignOut={() => client?.auth.signOut()} onClose={() => setShowAuth(false)} />}
     {showCollection && <CollectionModal collections={collections} book={collectionBook} onCreate={createCollection} onAdd={addToCollection} onClose={() => setShowCollection(false)} />}
     {browserUrl && <SourceBrowser url={browserUrl} adBlockEnabled={preferences.adBlockEnabled} onClose={() => setBrowserUrl('')} onExternal={openExternal} />}
+    <UpdatePrompt onDownload={() => void openExternal(`${WEBSITE_URL}#download`)} />
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
   </div>
 }
