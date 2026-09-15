@@ -3,7 +3,10 @@ name: Publish Resharium website
 on:
   push:
     branches: [main]
-    paths: ['website/**', 'scripts/build-website.mjs', 'assets/**', 'package.json', '.github/workflows/website.yml']
+    # A version bump is pushed before its Release exists. Deploying on package.json
+    # here would publish the previous release under the same commit SHA, and the
+    # later Release deployment would be treated by Pages as already completed.
+    paths: ['website/**', 'scripts/build-website.mjs', 'assets/**', '.github/workflows/website.yml']
   release:
     types: [published, edited]
   workflow_dispatch:
