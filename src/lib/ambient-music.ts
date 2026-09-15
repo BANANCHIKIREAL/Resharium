@@ -2,6 +2,7 @@ let context: AudioContext | null = null
 let master: GainNode | null = null
 let timer = 0
 let chordIndex = 0
+let playing = false
 
 const chords = [
   [130.81, 164.81, 196],
@@ -11,7 +12,7 @@ const chords = [
 ]
 
 function playChord() {
-  if (!context || !master) return
+  if (!context || !master || !playing) return
   const now = context.currentTime
   const chord = chords[chordIndex++ % chords.length]
   chord.forEach((frequency, index) => {
@@ -32,17 +33,26 @@ function playChord() {
 
 export async function startAmbientMusic(volume: number) {
   if (!context) {
-    context = new AudioContext()
+    const AudioContextClass = window.AudioContext || (window as typeof window & { webkitAudioContext?: typeof AudioContext }).webkitAudioContext
+    if (!AudioContextClass) return false
+    context = new AudioContextClass()
     master = context.createGain()
     const filter = context.createBiquadFilter()
     filter.type = 'lowpass'
     filter.frequency.value = 720
     master.connect(filter).connect(context.destination)
     master.gain.value = Math.max(0, Math.min(1, volume))
+  }
+  if (context.state !== 'running') {
+    try { await context.resume() } catch { return false }
+  }
+  if (context.state !== 'running') return false
+  if (!playing) {
+    playing = true
     playChord()
   }
-  if (context.state === 'suspended') await context.resume()
   setAmbientVolume(volume)
+  return true
 }
 
 export function setAmbientVolume(volume: number) {
@@ -53,6 +63,7 @@ export function setAmbientVolume(volume: number) {
 export function stopAmbientMusic() {
   if (timer) window.clearTimeout(timer)
   timer = 0
+  playing = false
   const active = context
   context = null
   master = null

@@ -62,6 +62,8 @@ export default function App() {
     setPreferences(next)
     try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(next)) } catch { /* Settings remain active for this session. */ }
     if (typeof changes.adBlockEnabled === 'boolean') void window.desktop?.setAdBlockEnabled(changes.adBlockEnabled)
+    if (changes.musicEnabled === true) void startAmbientMusic(next.musicVolume)
+    if (changes.musicEnabled === false) stopAmbientMusic()
   }, [])
 
   const changeMinimizeShortcut = useCallback(async (shortcut: string) => {
@@ -112,10 +114,17 @@ export default function App() {
       return
     }
     const start = () => { void startAmbientMusic(preferences.musicVolume) }
-    window.addEventListener('pointerdown', start, { once: true })
-    window.addEventListener('keydown', start, { once: true })
+    // Android WebView variants do not all dispatch Pointer Events. Keeping these
+    // listeners active also resumes audio after the app returns from background.
+    window.addEventListener('pointerdown', start, { passive: true })
+    window.addEventListener('touchstart', start, { passive: true })
+    window.addEventListener('click', start)
+    window.addEventListener('keydown', start)
+    start()
     return () => {
       window.removeEventListener('pointerdown', start)
+      window.removeEventListener('touchstart', start)
+      window.removeEventListener('click', start)
       window.removeEventListener('keydown', start)
     }
   }, [preferences.musicEnabled])
