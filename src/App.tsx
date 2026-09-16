@@ -4,10 +4,9 @@ import { books as bundledBooks, decorateBook, demoSolutions, providerSearchesFor
 import type { Book, BookCollection, BookOpenOrigin, RecentVisit, SolutionLink, View } from './types'
 import { createSupabase, getStoredSettings } from './lib/supabase'
 import { addRecentVisit, mergeRecentVisits, normalizeRecentVisits, type NewRecentVisit } from './lib/recent'
-import { DEFAULT_PREFERENCES, normalizePreferences, type AppPreferences } from './lib/preferences'
-import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, ProfilePage, RecentPage, SettingsPage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdatePrompt } from './components'
+import { DEFAULT_PREFERENCES, normalizePreferences, shouldApplyRemoteLearningProfile, type AppPreferences, type CountryCode, type LearningProfile } from './lib/preferences'
+import { AddSolutionModal, AuthModal, BookDrawer, BookGrid, CollectionModal, CollectionsPage, GradePicker, Hero, ModerationPage, Onboarding, ProfilePage, RecentPage, SettingsPage, Sidebar, SourceBrowser, SubjectRow, Toast, Topbar, UpdatePrompt } from './components'
 import { closeNativePage, isNativeAndroid, listenForNativeUrls, openNativePage, openNativeSourcePage, requestQuickSettingsTile } from './mobile'
-import { setAmbientVolume, startAmbientMusic, stopAmbientMusic } from './lib/ambient-music'
 import { WebsitePromo, WEBSITE_URL } from './WebsitePromo'
 
 const FAVORITES_KEY = 'resharium.favorites'
@@ -16,6 +15,7 @@ const COLLECTIONS_KEY = 'resharium.collections'
 const RECENT_KEY = 'resharium.recent:v1'
 const PREFERENCES_KEY = 'resharium.preferences:v1'
 const QUICK_TILE_PROMPT_KEY = 'resharium.quick-tile-prompted:v1'
+const COUNTRY_CODES = new Set<CountryCode>(['BY', 'KZ', 'RU'])
 
 function readJson<T>(key: string, fallback: T): T {
   try { return JSON.parse(localStorage.getItem(key) || '') as T } catch { return fallback }
@@ -62,9 +62,27 @@ export default function App() {
     setPreferences(next)
     try { localStorage.setItem(PREFERENCES_KEY, JSON.stringify(next)) } catch { /* Settings remain active for this session. */ }
     if (typeof changes.adBlockEnabled === 'boolean') void window.desktop?.setAdBlockEnabled(changes.adBlockEnabled)
-    if (changes.musicEnabled === true) void startAmbientMusic(next.musicVolume)
-    if (changes.musicEnabled === false) stopAmbientMusic()
   }, [])
+
+  const saveLearningProfile = useCallback(async (profile: LearningProfile) => {
+    const profileUpdatedAt = Date.now()
+    updatePreferences({ ...profile, profileUpdatedAt, onboardingComplete: true })
+    setGrade(profile.schoolGrade)
+    if (!client || !user) {
+      setToast('Учебный профиль сохранён на устройстве')
+      return null
+    }
+    const { data, error } = await client.auth.updateUser({ data: {
+      ...user.user_metadata,
+      resharium_country: profile.country,
+      resharium_school_grade: profile.schoolGrade,
+      resharium_profile_updated_at: profileUpdatedAt,
+    } })
+    if (error) return `Профиль сохранён на устройстве, но не синхронизирован: ${error.message}`
+    setUser(data.user)
+    setToast('Учебный профиль сохранён и синхронизирован')
+    return null
+  }, [client, updatePreferences, user])
 
   const changeMinimizeShortcut = useCallback(async (shortcut: string) => {
     if (!window.desktop) return 'Горячая клавиша доступна только в приложении для Windows'
@@ -109,31 +127,6 @@ export default function App() {
   }, [preferences.theme, preferences.animationsEnabled])
 
   useEffect(() => {
-    if (!preferences.musicEnabled) {
-      stopAmbientMusic()
-      return
-    }
-    const start = () => { void startAmbientMusic(preferences.musicVolume) }
-    // Android WebView variants do not all dispatch Pointer Events. Keeping these
-    // listeners active also resumes audio after the app returns from background.
-    window.addEventListener('pointerdown', start, { passive: true })
-    window.addEventListener('touchstart', start, { passive: true })
-    window.addEventListener('click', start)
-    window.addEventListener('keydown', start)
-    start()
-    return () => {
-      window.removeEventListener('pointerdown', start)
-      window.removeEventListener('touchstart', start)
-      window.removeEventListener('click', start)
-      window.removeEventListener('keydown', start)
-    }
-  }, [preferences.musicEnabled])
-
-  useEffect(() => setAmbientVolume(preferences.musicVolume), [preferences.musicVolume])
-
-  useEffect(() => () => stopAmbientMusic(), [])
-
-  useEffect(() => {
     if (!isNativeAndroid || localStorage.getItem(QUICK_TILE_PROMPT_KEY)) return
     const timer = window.setTimeout(() => {
       localStorage.setItem(QUICK_TILE_PROMPT_KEY, '1')
@@ -158,6 +151,25 @@ export default function App() {
     window.desktop?.getPendingAuthUrl().then((url) => { if (url) void handleAuthCallback(url) })
     return () => { authListener.subscription.unsubscribe(); unsubscribeDesktop?.() }
   }, [client, handleAuthCallback])
+
+  useEffect(() => {
+    if (!client || !user) return
+    const remoteCountry = user.user_metadata?.resharium_country
+    const remoteGrade = Number(user.user_metadata?.resharium_school_grade)
+    const remoteUpdatedAt = Number(user.user_metadata?.resharium_profile_updated_at) || 0
+    const local = preferencesRef.current
+    const hasRemoteProfile = COUNTRY_CODES.has(remoteCountry) && Number.isInteger(remoteGrade) && remoteGrade >= 1 && remoteGrade <= 11
+    if (shouldApplyRemoteLearningProfile(local, remoteUpdatedAt, hasRemoteProfile)) {
+      updatePreferences({ country: remoteCountry, schoolGrade: remoteGrade, profileUpdatedAt: remoteUpdatedAt, onboardingComplete: true })
+      return
+    }
+    if (local.onboardingComplete) void client.auth.updateUser({ data: {
+      ...user.user_metadata,
+      resharium_country: local.country,
+      resharium_school_grade: local.schoolGrade,
+      resharium_profile_updated_at: local.profileUpdatedAt,
+    } }).then(({ data, error }) => { if (!error) setUser(data.user) })
+  }, [client, updatePreferences, user?.id])
 
   useEffect(() => {
     if (!isNativeAndroid) return
@@ -187,18 +199,20 @@ export default function App() {
     let active = true
     client.from('textbooks').select('id,title,author,grade,subject,year,cover_url,source_url,source_name,popular').eq('active', true).order('grade').order('title').then(({ data, error }) => {
       if (!active || error || !data?.length) return
-      setBooks(data.map((row, index) => decorateBook({
+      const remoteBelarusBooks = data.map((row, index) => decorateBook({
         id: row.id,
         title: row.title,
         author: row.author,
         grade: row.grade,
         subject: row.subject as Book['subject'],
+        country: 'BY',
         year: row.year || undefined,
         coverUrl: row.cover_url || undefined,
         sourceUrl: row.source_url || undefined,
         sourceName: row.source_name || undefined,
         popular: row.popular,
-      }, index)))
+      }, index))
+      setBooks([...remoteBelarusBooks, ...bundledBooks.filter((book) => book.country !== 'BY')])
     })
     return () => { active = false }
   }, [client])
@@ -315,23 +329,26 @@ export default function App() {
     pageRef.current?.scrollTo({ top: 0, behavior: 'instant' })
   }, [view])
 
+  const countryBooks = useMemo(() => books.filter((book) => book.country === preferences.country), [books, preferences.country])
+  const availableSubjects = useMemo(() => new Set(countryBooks.map((book) => book.subject)), [countryBooks])
+
   const filteredBooks = useMemo(() => {
     const needle = query.trim().toLowerCase()
-    return books.filter((book) => {
+    return countryBooks.filter((book) => {
       const matchesQuery = !needle || `${book.title} ${book.author} ${book.subject} ${book.grade}`.toLowerCase().includes(needle)
       const matchesSubject = !subject || book.subject === subject
       const matchesGrade = !grade || book.grade === grade
       const matchesFavorite = view !== 'favorites' || favorites.includes(book.id)
       return matchesQuery && matchesSubject && matchesGrade && matchesFavorite
     })
-  }, [query, subject, grade, view, favorites])
+  }, [countryBooks, query, subject, grade, view, favorites])
 
   const publicSolutions = useMemo(() => solutions.filter((item) => !item.status || item.status === 'approved'), [solutions])
 
   const sourceCounts = useMemo(() => publicSolutions.reduce<Record<string, number>>((counts, item) => {
     counts[item.book_key] = (counts[item.book_key] || 0) + 1
     return counts
-  }, Object.fromEntries(books.map((book) => [book.id, providerSearchesFor(book).length]))), [publicSolutions, books])
+  }, Object.fromEntries(books.map((book) => [book.id, providerSearchesFor(book, preferences.country).length]))), [publicSolutions, books, preferences.country])
 
   function toggleFavorite(id: string) {
     setFavorites((current) => {
@@ -553,22 +570,23 @@ export default function App() {
     <main className="main-area">
       <Topbar query={query} setQuery={setQuery} user={user} onProfile={() => setView('profile')} onSettings={() => setView('settings')} />
       <div className="page" ref={pageRef}>
-        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} onChange={updatePreferences} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
+        {view === 'moderation' && isAdmin ? <ModerationPage solutions={solutions.filter((item) => !item.id.startsWith('demo-'))} books={books} onModerate={moderateSolution} onDelete={(id) => void deleteSolution(id)} onOpenLink={openLink} /> : view === 'profile' ? <ProfilePage user={user} favorites={favorites.length} solutions={solutions.filter((item) => item.created_by === user?.id).length} submitted={solutions.filter((item) => item.created_by === user?.id)} onAuth={() => setShowAuth(true)} onDelete={(id) => void deleteSolution(id)} /> : view === 'settings' ? <SettingsPage preferences={preferences} isDesktop={Boolean(window.desktop)} onChange={updatePreferences} onLearningProfile={saveLearningProfile} onShortcut={changeMinimizeShortcut} onShortcutCapture={setShortcutCapture} /> : view === 'recent' ? <RecentPage visits={recentVisits} books={books} onOpenBook={openBook} onOpenSolution={openRecentSolution} onClear={clearRecent} /> : view === 'collections' ? <CollectionsPage collections={collections} activeId={activeCollectionId} books={books} favorites={favorites} sourceCounts={sourceCounts} onActive={setActiveCollectionId} onCreate={() => { setCollectionBook(null); setShowCollection(true) }} onDelete={deleteCollection} onFavorite={toggleFavorite} onOpen={openBook} /> : <>
           {view === 'home' && !query && !subject && !grade && <><Hero onCatalog={() => setView('catalog')} /><WebsitePromo onOpen={() => { void openExternal(WEBSITE_URL).catch(() => setToast('Не удалось открыть сайт. Попробуйте ещё раз.')) }} /></>}
           <section className="filter-section">
             <div className="filter-head"><div><span className="eyebrow">Быстрый выбор</span><h2>Что разбираем сегодня?</h2></div><GradePicker grade={grade} onSelect={setGrade} /></div>
-            <SubjectRow active={subject} onSelect={setSubject} />
+            <SubjectRow active={subject} available={availableSubjects} onSelect={setSubject} />
           </section>
           <BookGrid books={visibleBooks} favorites={favorites} sourceCounts={sourceCounts} onFavorite={toggleFavorite} onOpen={openBook} title={pageTitle} />
         </>}
         <footer className="app-footer"><span>Решариум от BANANCHIKIREAL · каталог образовательных ссылок</span></footer>
       </div>
     </main>
-    {selectedBook && <BookDrawer book={selectedBook} origin={bookOpenOrigin} solutions={publicSolutions.filter((item) => item.book_key === selectedBook.id)} onClose={closeBook} onAdd={() => setShowAdd(true)} onCollect={() => { setCollectionBook(selectedBook); setShowCollection(true) }} onOpenLink={openBookSolution} />}
-    {showAdd && <AddSolutionModal books={books} initialBook={selectedBook} onClose={() => setShowAdd(false)} onSubmit={addSolution} requireAuth={!user} />}
+    {selectedBook && <BookDrawer book={selectedBook} origin={bookOpenOrigin} solutions={publicSolutions.filter((item) => item.book_key === selectedBook.id)} country={preferences.country} onClose={closeBook} onAdd={() => setShowAdd(true)} onCollect={() => { setCollectionBook(selectedBook); setShowCollection(true) }} onOpenLink={openBookSolution} />}
+    {showAdd && <AddSolutionModal books={countryBooks} initialBook={selectedBook} country={preferences.country} onClose={() => setShowAdd(false)} onSubmit={addSolution} requireAuth={!user} />}
     {showAuth && <AuthModal connected={Boolean(client)} googleEnabled={googleEnabled} user={user} onGoogle={googleLogin} onEmail={emailAuth} onResend={resendConfirmation} onSignOut={() => client?.auth.signOut()} onClose={() => setShowAuth(false)} />}
     {showCollection && <CollectionModal collections={collections} book={collectionBook} onCreate={createCollection} onAdd={addToCollection} onClose={() => setShowCollection(false)} />}
     {browserUrl && <SourceBrowser url={browserUrl} adBlockEnabled={preferences.adBlockEnabled} onClose={() => setBrowserUrl('')} onExternal={openExternal} />}
+    {!preferences.onboardingComplete && <Onboarding preferences={preferences} onSave={saveLearningProfile} />}
     <UpdatePrompt onDownload={() => void openExternal(`${WEBSITE_URL}#download`)} />
     {toast && <Toast message={toast} onDone={() => setToast('')} />}
   </div>

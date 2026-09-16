@@ -12,6 +12,22 @@ describe('verified provider availability', () => {
     expect(providerSearchesFor(section(7, 'Химия')).some((item) => item.domain === 'resheba.top')).toBe(true)
   })
 
+  it('keeps providers separated by the selected country', () => {
+    const chemistry = section(7, 'Химия')
+    expect(providerSearchesFor(chemistry, 'BY').map((item) => item.domain)).toContain('resheba.top')
+    expect(providerSearchesFor(chemistry, 'KZ').map((item) => item.domain)).toEqual(expect.arrayContaining(['otvetkz.com', 'gdzznaniya.net']))
+    expect(providerSearchesFor(chemistry, 'RU').map((item) => item.domain)).toContain('gdz.ru')
+    expect(providerSearchesFor(chemistry, 'KZ').some((item) => item.country === 'BY')).toBe(false)
+  })
+
+  it('offers the expanded verified source set for country textbooks', () => {
+    const kazakhstanPrimary = books.find((item) => item.country === 'KZ' && item.grade === 3 && item.subject === 'Математика')
+    const russiaSecondary = books.find((item) => item.country === 'RU' && item.grade === 7 && item.subject === 'Математика')
+    if (!kazakhstanPrimary || !russiaSecondary) throw new Error('Missing country textbook fixtures')
+    expect(providerSearchesFor(kazakhstanPrimary, 'KZ').map((item) => item.domain)).toContain('5baga.com')
+    expect(providerSearchesFor(russiaSecondary, 'RU').map((item) => item.domain)).toEqual(expect.arrayContaining(['gdz.ru', 'reshutka.ru', 'reshak.ru', 'vsegdz.ru', 'gdz1.com', 'gdzj.ru']))
+  })
+
   it('does not claim a labor-training GDZ exists', () => {
     expect(books.some((item) => item.grade === 7 && item.subject === 'Трудовое обучение')).toBe(false)
   })
@@ -21,9 +37,16 @@ describe('verified provider availability', () => {
   })
 
   it('contains the complete current Resheba catalog snapshot', () => {
-    expect(books).toHaveLength(153)
-    expect(books.filter((item) => item.grade === 7)).toHaveLength(22)
+    expect(books.filter((item) => item.country === 'BY')).toHaveLength(153)
+    expect(books.filter((item) => item.country === 'BY' && item.grade === 7)).toHaveLength(22)
     expect(section(7, 'Химия').sourceUrl).toMatch(/^https:\/\/resheba\.top\//)
+  })
+
+  it('keeps separate textbook catalogs for every supported country', () => {
+    expect(books.filter((item) => item.country === 'KZ')).toHaveLength(200)
+    expect(books.filter((item) => item.country === 'RU')).toHaveLength(506)
+    expect(books.find((item) => item.country === 'KZ' && item.grade === 7)?.sourceUrl).toMatch(/^https:\/\/otvetkz\.com\//)
+    expect(books.find((item) => item.country === 'RU' && item.grade === 7)?.sourceUrl).toMatch(/^https:\/\/reshak\.ru\//)
   })
 
   it('keeps genuine covers and uses a verified sharper copy when available', () => {
@@ -39,15 +62,35 @@ describe('verified provider availability', () => {
     }
   })
 
-  it('builds a textbook-specific search for every alternative provider', () => {
+  it('builds a concise catalog search for every alternative provider', () => {
     const book = section(7, 'Химия')
     for (const provider of providerSearchesFor(book)) {
       const url = new URL(providerBookSearchUrl(book, provider.domain))
       const query = url.searchParams.get('q') || ''
       expect(query).toContain(`site:${provider.domain}`)
-      expect(query).toContain(book.title)
+      expect(query).toContain(book.subject)
+      expect(query).toContain('7 класс')
+      expect(query).not.toContain(book.author)
       expect(query).not.toBe(`site:${provider.domain}`)
     }
+  })
+
+  it('does not duplicate the class or author from a verbose book title', () => {
+    const book = books.find((item) => item.country === 'BY' && item.title.includes('Математика 2 класс Чеботаревская'))
+    if (!book) throw new Error('Missing verbose title fixture')
+    const query = new URL(providerBookSearchUrl(book, 'gdz.by')).searchParams.get('q') || ''
+    expect(query).toBe('site:gdz.by Математика 2 класс ГДЗ')
+    expect(query).not.toContain('Чеботаревская')
+    expect(query.match(/2 класс/g)).toHaveLength(1)
+  })
+
+  it('does not search Kazakhstan providers by a Belarusian textbook author', () => {
+    const book = section(7, 'Химия')
+    const url = new URL(providerBookSearchUrl(book, 'otvetkz.com'))
+    const query = url.searchParams.get('q') || ''
+    expect(query).toContain('Химия')
+    expect(query).toContain('7 класс')
+    expect(query).not.toContain(book.author)
   })
 
   it('uses the source favicon for a custom solution', () => {

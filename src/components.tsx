@@ -5,7 +5,7 @@ import { providerBookSearchUrl, providerIconFor, providerOptionsFor, providerSea
 import { profileAvatarUrl } from './avatar'
 import { Icon, type IconName } from './icons'
 import { getAndroidAppVersion, isNativeAndroid } from './mobile'
-import { displayAccelerator, isModifierOnlyAccelerator, keyboardEventToAccelerator, modifierKeyToAccelerator, type AppPreferences, type AppTheme } from './lib/preferences'
+import { COUNTRY_OPTIONS, displayAccelerator, isModifierOnlyAccelerator, keyboardEventToAccelerator, modifierKeyToAccelerator, type AppPreferences, type AppTheme, type CountryCode, type LearningProfile } from './lib/preferences'
 import { latestReleaseFor, normalizeVersion, type GitHubRelease } from './lib/update'
 
 function bookCoverStyle(book: Book) {
@@ -138,11 +138,11 @@ export function Hero({ onCatalog }: { onCatalog: () => void }) {
   )
 }
 
-export function SubjectRow({ active, onSelect }: { active: string; onSelect: (subject: string) => void }) {
+export function SubjectRow({ active, available, onSelect }: { active: string; available?: ReadonlySet<string>; onSelect: (subject: string) => void }) {
   return (
     <div className="subject-row">
       <button className={!active ? 'active' : ''} onClick={() => onSelect('')}><span className="subject-icon all"><Icon name="apps" /></span><span>Все</span></button>
-      {subjects.map((subject) => (
+      {subjects.filter((subject) => !available || available.has(subject.name)).map((subject) => (
         <button key={subject.name} className={active === subject.name ? 'active' : ''} onClick={() => onSelect(subject.name)}>
           <span className="subject-icon" style={{ '--subject-color': subject.color } as React.CSSProperties}><Icon name={subject.icon} /></span>
           <span>{subject.name}</span>
@@ -286,10 +286,99 @@ const themeOptions: Array<{ id: AppTheme; name: string; colors: [string, string]
   { id: 'sunset', name: 'Закат', colors: ['#f06e9e', '#ff9b59'] },
 ]
 
-export function SettingsPage({ preferences, isDesktop, onChange, onShortcut, onShortcutCapture }: {
+function CountryFlag({ country, decorative = false }: { country: (typeof COUNTRY_OPTIONS)[number]; decorative?: boolean }) {
+  return <img className="country-flag" src={country.flagUrl} alt={decorative ? '' : `Флаг: ${country.name}`} aria-hidden={decorative || undefined} />
+}
+
+function LearningProfileForm({ initial, onSave, submitLabel }: {
+  initial: LearningProfile
+  onSave: (profile: LearningProfile) => Promise<string | null>
+  submitLabel: string
+}) {
+  const [country, setCountry] = useState(initial.country)
+  const [schoolGrade, setSchoolGrade] = useState(initial.schoolGrade)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  useEffect(() => { setCountry(initial.country); setSchoolGrade(initial.schoolGrade) }, [initial.country, initial.schoolGrade])
+  async function submit(event: FormEvent) {
+    event.preventDefault()
+    setSaving(true); setError('')
+    const result = await onSave({ country, schoolGrade })
+    setSaving(false)
+    if (result) setError(result)
+  }
+  return <form className="learning-profile-form" onSubmit={(event) => void submit(event)}>
+    <fieldset><legend>Страна</legend><div className="country-picker">{COUNTRY_OPTIONS.map((option) => <button type="button" role="radio" aria-checked={country === option.id} className={country === option.id ? 'selected' : ''} key={option.id} onClick={() => setCountry(option.id)}><CountryFlag country={option} decorative /><b>{option.name}</b>{country === option.id && <Icon name="check_circle" />}</button>)}</div></fieldset>
+    <label className="grade-setting"><span>Ваш класс</span><select value={schoolGrade} onChange={(event) => setSchoolGrade(Number(event.target.value))}>{Array.from({ length: 11 }, (_, index) => index + 1).map((value) => <option value={value} key={value}>{value} класс</option>)}</select></label>
+    {error && <p className="form-error">{error}</p>}
+    <button className="primary learning-profile-save" disabled={saving}>{saving ? 'Сохраняем…' : submitLabel}<Icon name="arrow_forward" /></button>
+  </form>
+}
+
+export function Onboarding({ preferences, onSave }: {
+  preferences: AppPreferences
+  onSave: (profile: LearningProfile) => Promise<string | null>
+}) {
+  const [step, setStep] = useState(0)
+  const [country, setCountry] = useState<CountryCode>(preferences.country)
+  const [schoolGrade, setSchoolGrade] = useState(preferences.schoolGrade)
+  const [acknowledged, setAcknowledged] = useState(false)
+  const [saving, setSaving] = useState(false)
+  const [error, setError] = useState('')
+  const touchStart = useRef<number | null>(null)
+  const selectedCountry = COUNTRY_OPTIONS.find((option) => option.id === country) || COUNTRY_OPTIONS[0]
+
+  const move = (next: number) => setStep(Math.max(0, Math.min(2, next)))
+  async function finish() {
+    if (!acknowledged) return
+    setSaving(true); setError('')
+    const result = await onSave({ country, schoolGrade })
+    setSaving(false)
+    if (result) setError(result)
+  }
+  const finishOnSubmit = (event: FormEvent) => { event.preventDefault(); void finish() }
+  const onTouchEnd = (event: React.TouchEvent) => {
+    if (touchStart.current === null) return
+    const distance = event.changedTouches[0].clientX - touchStart.current
+    touchStart.current = null
+    if (Math.abs(distance) < 55) return
+    if (distance < 0 && step < 2) move(step + 1)
+    if (distance > 0 && step > 0) move(step - 1)
+  }
+
+  return <div className="onboarding-overlay"><section className="onboarding-wizard" role="dialog" aria-modal="true" aria-labelledby="onboarding-title" onTouchStart={(event) => { touchStart.current = event.touches[0].clientX }} onTouchEnd={onTouchEnd}>
+    <div className="onboarding-progress" aria-label={`Шаг ${step + 1} из 3`}>{[0, 1, 2].map((item) => <span key={item} className={item <= step ? 'active' : ''} />)}</div>
+    <div className="onboarding-track" style={{ transform: `translate3d(-${step * 100}%,0,0)` }}>
+      <article className="onboarding-page onboarding-welcome">
+        <div className="onboarding-visual" aria-hidden="true"><span className="welcome-orbit orbit-one" /><span className="welcome-orbit orbit-two" /><i><Icon name="auto_stories" /></i></div>
+        <div className="onboarding-copy"><span className="eyebrow">Первый запуск</span><h1 id="onboarding-title">Учиться стало проще</h1><p>Настроим каталог под вашу страну и класс. Это займёт меньше минуты.</p><button className="primary onboarding-next" onClick={() => move(1)}>Начать настройку<Icon name="arrow_forward" /></button></div>
+      </article>
+      <article className="onboarding-page onboarding-country-page">
+        <div className="onboarding-page-head"><button className="icon-btn" aria-label="Назад" onClick={() => move(0)}><Icon name="arrow_back" /></button><span>Шаг 1 из 2</span></div>
+        <div className="onboarding-copy"><span className="eyebrow">Ваш каталог</span><h2>Где вы учитесь?</h2><p>Покажем ГДЗ именно для школьной программы выбранной страны.</p></div>
+        <div className="country-picker onboarding-country-picker" role="radiogroup">{COUNTRY_OPTIONS.map((option) => <button type="button" role="radio" aria-checked={country === option.id} className={country === option.id ? 'selected' : ''} key={option.id} onClick={() => setCountry(option.id)}><CountryFlag country={option} /><b>{option.name}</b>{country === option.id && <Icon name="check_circle" />}</button>)}</div>
+        <button className="primary onboarding-next" onClick={() => move(2)}>Продолжить<Icon name="arrow_forward" /></button>
+      </article>
+      <article className="onboarding-page onboarding-finish-page">
+        <div className="onboarding-page-head"><button className="icon-btn" aria-label="Назад" onClick={() => move(1)}><Icon name="arrow_back" /></button><span>Шаг 2 из 2</span></div>
+        <form className="onboarding-finish" onSubmit={finishOnSubmit}>
+          <div className="onboarding-copy"><span className="eyebrow">Почти готово</span><h2>{selectedCountry.name} · ваш класс</h2><p>Класс сразу включится в фильтре каталога.</p></div>
+          <div className="grade-grid" role="radiogroup" aria-label="Ваш класс">{Array.from({ length: 11 }, (_, index) => index + 1).map((value) => <button type="button" role="radio" aria-checked={schoolGrade === value} className={schoolGrade === value ? 'selected' : ''} key={value} onClick={() => setSchoolGrade(value)}>{value}</button>)}</div>
+          <label className="onboarding-consent"><input type="checkbox" checked={acknowledged} onChange={(event) => setAcknowledged(event.target.checked)} /><span><b>Использовать для самопроверки</b><small>Я понимаю, что материалы открываются на сторонних сайтах и принадлежат их правообладателям.</small></span></label>
+          {error && <p className="form-error">{error}</p>}
+          <button className="primary onboarding-next" disabled={!acknowledged || saving}>{saving ? 'Сохраняем…' : 'Открыть Решариум'}<Icon name="arrow_forward" /></button>
+        </form>
+      </article>
+    </div>
+    <small className="onboarding-swipe">Можно листать свайпом</small>
+  </section></div>
+}
+
+export function SettingsPage({ preferences, isDesktop, onChange, onLearningProfile, onShortcut, onShortcutCapture }: {
   preferences: AppPreferences
   isDesktop: boolean
   onChange: (changes: Partial<AppPreferences>) => void
+  onLearningProfile: (profile: LearningProfile) => Promise<string | null>
   onShortcut: (shortcut: string) => Promise<string | null>
   onShortcutCapture: (active: boolean) => Promise<void>
 }) {
@@ -352,16 +441,17 @@ export function SettingsPage({ preferences, isDesktop, onChange, onShortcut, onS
   }
 
   return <section className="settings-page">
-    <div className="settings-heading"><span className="eyebrow">Персонализация</span><h1>Настройки</h1><p>Параметры сохраняются только на этом устройстве.</p></div>
+    <div className="settings-heading"><span className="eyebrow">Персонализация</span><h1>Настройки</h1><p>Настройки устройства сохраняются локально, учебный профиль синхронизируется после входа.</p></div>
     <div className="settings-groups">
+      <section className="settings-card learning-settings"><div className="settings-card-title"><span><Icon name="public" /></span><div><h2>Учебный профиль</h2><p>Страна и класс, выбранные при первом запуске.</p></div></div><LearningProfileForm initial={preferences} onSave={onLearningProfile} submitLabel="Сохранить профиль" /></section>
       <section className="settings-card"><div className="settings-card-title"><span><Icon name="palette" /></span><div><h2>Тема оформления</h2><p>Выберите цвет стекла и акцентов интерфейса.</p></div></div><div className="theme-picker">{themeOptions.map((theme) => <button key={theme.id} aria-pressed={preferences.theme === theme.id} className={preferences.theme === theme.id ? 'selected' : ''} onClick={() => onChange({ theme: theme.id })}><span className="theme-preview" style={{ '--theme-a': theme.colors[0], '--theme-b': theme.colors[1] } as React.CSSProperties} /><span>{theme.name}</span>{preferences.theme === theme.id && <Icon name="check_circle" />}</button>)}</div></section>
-      <section className="settings-card"><div className="setting-row"><span className="setting-icon"><Icon name="orbit" /></span><div><h2>Анимации</h2><p>Плавные переходы, блики и перелёт обложек.</p></div><button className={`switch${preferences.animationsEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.animationsEnabled} aria-label="Анимации" onClick={() => onChange({ animationsEnabled: !preferences.animationsEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon"><Icon name="volume_up" /></span><div><h2>Спокойная музыка</h2><p>Тихий фоновый эмбиент во время занятий.</p>{preferences.musicEnabled && <input className="volume-slider" aria-label="Громкость музыки" type="range" min="0" max="0.35" step="0.01" value={preferences.musicVolume} onChange={(event) => onChange({ musicVolume: Number(event.target.value) })} />}</div><button className={`switch${preferences.musicEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.musicEnabled} aria-label="Спокойная музыка" onClick={() => onChange({ musicEnabled: !preferences.musicEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon secure"><Icon name="shield" /></span><div><h2>Блокировка рекламы</h2><p>Фильтрует рекламу и трекеры во встроенном просмотрщике.</p></div><button className={`switch${preferences.adBlockEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.adBlockEnabled} aria-label="Блокировка рекламы" onClick={() => onChange({ adBlockEnabled: !preferences.adBlockEnabled })}><span /></button></div></section>
+      <section className="settings-card"><div className="setting-row"><span className="setting-icon"><Icon name="orbit" /></span><div><h2>Анимации</h2><p>Плавные переходы, блики и перелёт обложек.</p></div><button className={`switch${preferences.animationsEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.animationsEnabled} aria-label="Анимации" onClick={() => onChange({ animationsEnabled: !preferences.animationsEnabled })}><span /></button></div><div className="setting-row"><span className="setting-icon secure"><Icon name="shield" /></span><div><h2>Блокировка рекламы</h2><p>Фильтрует рекламу и трекеры во встроенном просмотрщике.</p></div><button className={`switch${preferences.adBlockEnabled ? ' on' : ''}`} role="switch" aria-checked={preferences.adBlockEnabled} aria-label="Блокировка рекламы" onClick={() => onChange({ adBlockEnabled: !preferences.adBlockEnabled })}><span /></button></div></section>
       {isDesktop && <section className="settings-card"><div className="settings-card-title"><span><Icon name="keyboard" /></span><div><h2>Быстрое сворачивание</h2><p>{isModifierOnlyAccelerator(preferences.minimizeShortcut) ? 'Одиночная клавиша работает, пока окно Решариума активно.' : 'Сочетание работает глобально, даже когда открыто другое окно.'}</p></div></div><div className={`shortcut-recorder${recording ? ' recording' : ''}`}><div><small>Текущая клавиша</small><kbd>{recording ? 'Нажмите клавиши…' : displayAccelerator(preferences.minimizeShortcut)}</kbd></div><button className="soft-btn" onClick={beginCapture}>{recording ? 'Слушаю…' : 'Изменить'}</button><button className="ghost" onClick={() => void onShortcut('CommandOrControl+Shift+M').then((error) => setShortcutError(error || ''))}>По умолчанию</button></div>{shortcutError && <p className="setting-error">{shortcutError}</p>}</section>}
     </div>
   </section>
 }
 
-export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect, onOpenLink }: {
+export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect, onOpenLink, country = 'BY' }: {
   book: Book
   origin?: BookOpenOrigin | null
   solutions: SolutionLink[]
@@ -369,6 +459,7 @@ export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect,
   onAdd: () => void
   onCollect: () => void
   onOpenLink: (url: string, details: { task?: string; provider: string }) => void
+  country?: CountryCode
 }) {
   const [taskSearch, setTaskSearch] = useState('')
   const coverRef = useRef<HTMLDivElement | null>(null)
@@ -398,7 +489,9 @@ export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect,
     return () => window.clearTimeout(timer)
   }, [book.id, origin])
   const filtered = solutions.filter((item) => item.task.toLowerCase().includes(taskSearch.toLowerCase()))
-  const availableProviders = providerSearchesFor(book).filter((provider) => provider.provider !== book.sourceName)
+  const nativeSourceUrl = book.country === country ? book.sourceUrl : undefined
+  const availableProviders = providerSearchesFor(book, country).filter((provider) => provider.provider !== book.sourceName)
+  const countryOption = COUNTRY_OPTIONS.find((option) => option.id === country) || COUNTRY_OPTIONS[0]
   const sourceUrl = (domain: string) => providerBookSearchUrl(book, domain, taskSearch.trim())
   return (
     <div className="overlay" onMouseDown={(event) => event.target === event.currentTarget && onClose()}>
@@ -411,11 +504,11 @@ export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect,
         <div className="drawer-book">
           <div className={`book-cover large morph-target${morphDone ? ' ready' : ''}`} ref={coverRef} style={bookCoverStyle(book)}><BookCoverContent book={book} descriptive /></div>
           {morph && !morphDone && <div className="book-cover large book-cover-morph" aria-hidden="true" style={{ ...bookCoverStyle(book), '--morph-left': `${morph.left}px`, '--morph-top': `${morph.top}px`, '--morph-width': `${morph.width}px`, '--morph-height': `${morph.height}px`, '--morph-x': `${morph.x}px`, '--morph-y': `${morph.y}px`, '--morph-scale-x': morph.scaleX, '--morph-scale-y': morph.scaleY } as React.CSSProperties}><BookCoverContent book={book} /></div>}
-          <div><span className="grade-pill">{book.grade} класс{book.year ? ` · ${book.year}` : ''}</span><h2>{book.title}</h2><p>{book.author}</p><span className="verified"><Icon name="verified" /> Каталог источников</span></div>
+          <div><span className="grade-pill">{book.grade} класс{book.year ? ` · ${book.year}` : ''}</span><h2>{book.title}</h2><p>{book.author}</p><span className="verified country-source"><CountryFlag country={countryOption} decorative /> ГДЗ: {countryOption.name}</span></div>
         </div>
         <label className="task-search"><Icon name="search" /><input value={taskSearch} onChange={(event) => setTaskSearch(event.target.value)} placeholder="Введите номер задания" /></label>
         <div className="solution-list">
-          <div className="list-head"><b>{taskSearch.trim() ? `Источники для «${taskSearch.trim()}»` : 'Все доступные источники'}</b><span>{filtered.length + availableProviders.length + (book.sourceUrl ? 1 : 0)}</span></div>
+          <div className="list-head"><b>{taskSearch.trim() ? `Источники для «${taskSearch.trim()}»` : `Источники: ${countryOption.name}`}</b><span>{filtered.length + availableProviders.length + (nativeSourceUrl ? 1 : 0)}</span></div>
           {filtered.map((item) => (
             <button className="solution-item" key={item.id} onClick={() => onOpenLink(item.url, { task: item.task, provider: item.provider })}>
               <ProviderLogo provider={item.provider} url={item.url} />
@@ -423,19 +516,19 @@ export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect,
               <Icon name="open_in_new" />
             </button>
           ))}
-          {book.sourceUrl && <button className="solution-item provider-search" onClick={() => onOpenLink(book.sourceUrl!, { task: taskSearch.trim() ? `Задание ${taskSearch.trim()}` : 'Страница учебника', provider: book.sourceName || 'Решёба' })}>
-            <ProviderLogo provider={book.sourceName || 'Решёба'} url={book.sourceUrl} />
+          {nativeSourceUrl && <button className="solution-item provider-search" onClick={() => onOpenLink(nativeSourceUrl, { task: taskSearch.trim() ? `Задание ${taskSearch.trim()}` : 'Страница учебника', provider: book.sourceName || 'Решёба' })}>
+            <ProviderLogo provider={book.sourceName || 'Решёба'} url={nativeSourceUrl} />
             <span><b>{book.sourceName || 'Источник учебника'} · этот учебник</b><small>{taskSearch.trim() ? `Открыть учебник и найти задание ${taskSearch.trim()}` : 'Открыть страницу учебника'}</small></span>
             <Icon name="open_in_new" />
           </button>}
           {availableProviders.map((provider) => (
             <button className="solution-item provider-search" key={provider.domain} onClick={() => onOpenLink(sourceUrl(provider.domain), { task: taskSearch.trim() ? `Задание ${taskSearch.trim()}` : 'Каталог решений', provider: provider.name })}>
               <span className="provider-logo provider-brand"><img src={provider.icon} alt="" /></span>
-              <span><b>{provider.name} · этот учебник</b><small>{taskSearch.trim() ? `Найти задание ${taskSearch.trim()} · ${provider.region}` : `Найти страницу учебника · ${provider.region}`}</small></span>
+              <span><b>{provider.name} · поиск по каталогу</b><small>{taskSearch.trim() ? `Найти задание ${taskSearch.trim()} · ${provider.region}` : `Показать учебники по предмету и классу · ${provider.region}`}</small></span>
               <Icon name="open_in_new" />
             </button>
           ))}
-          {!filtered.length && !availableProviders.length && !book.sourceUrl && <div className="verified-empty"><Icon name="fact_check" /><span><b>Подтверждённых ГДЗ не найдено</b><small>Для этого предмета и класса ни один проверенный источник пока не заявлен.</small></span></div>}
+          {!filtered.length && !availableProviders.length && !nativeSourceUrl && <div className="verified-empty"><Icon name="fact_check" /><span><b>ГДЗ для выбранной страны не найдено</b><small>Поменяйте страну в настройках или добавьте проверенную ссылку.</small></span></div>}
         </div>
         <div className="source-note"><Icon name="info" /><p>Решариум хранит каталог ссылок. Содержимое решения открывается на сайте-источнике и принадлежит его правообладателю.</p></div>
       </aside>
@@ -443,16 +536,17 @@ export function BookDrawer({ book, origin, solutions, onClose, onAdd, onCollect,
   )
 }
 
-export function AddSolutionModal({ books, initialBook, onClose, onSubmit, requireAuth }: {
+export function AddSolutionModal({ books, initialBook, onClose, onSubmit, requireAuth, country = 'BY' }: {
   books: Book[]
   initialBook?: Book | null
   onClose: () => void
   onSubmit: (solution: Omit<SolutionLink, 'id' | 'created_at'>) => Promise<string | null>
   requireAuth: boolean
+  country?: CountryCode
 }) {
   const [bookKey, setBookKey] = useState(initialBook?.id || books[0]?.id || '')
   const selectedBook = books.find((book) => book.id === bookKey) || books[0]
-  const providerOptions = selectedBook ? providerOptionsFor(selectedBook) : ['Другое']
+  const providerOptions = selectedBook ? providerOptionsFor(selectedBook, country) : ['Другое']
   const [provider, setProvider] = useState(() => providerOptions[0])
   const [url, setUrl] = useState('')
   const [note, setNote] = useState('')

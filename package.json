@@ -1,6 +1,6 @@
 {
   "name": "resharium",
-  "version": "0.6.1",
+  "version": "0.7.0",
   "private": true,
   "type": "module",
   "description": "Современный каталог ссылок на решения школьных заданий",
@@ -15,6 +15,7 @@
   "scripts": {
     "build:site": "node scripts/build-website.mjs",
     "catalog:refresh": "node scripts/fetch-resheba-catalog.mjs",
+    "catalog:countries": "node scripts/fetch-country-catalogs.mjs",
     "dev": "concurrently -k \"vite --host 127.0.0.1\" \"wait-on http://127.0.0.1:5173 && electron .\"",
     "build:web": "tsc -b && vite build",
     "build": "npm run build:web && electron-builder --win nsis",

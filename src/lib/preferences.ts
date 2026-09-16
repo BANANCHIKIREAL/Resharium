@@ -1,12 +1,26 @@
 export type AppTheme = 'violet' | 'ocean' | 'emerald' | 'sunset'
+export type CountryCode = 'BY' | 'KZ' | 'RU'
+
+export interface LearningProfile {
+  country: CountryCode
+  schoolGrade: number
+}
+
+export const COUNTRY_OPTIONS: Array<{ id: CountryCode; name: string; flagUrl: string }> = [
+  { id: 'BY', name: 'Беларусь', flagUrl: 'https://flagcdn.com/w80/by.png' },
+  { id: 'KZ', name: 'Казахстан', flagUrl: 'https://flagcdn.com/w80/kz.png' },
+  { id: 'RU', name: 'Россия', flagUrl: 'https://flagcdn.com/w80/ru.png' },
+]
 
 export interface AppPreferences {
   theme: AppTheme
   animationsEnabled: boolean
   adBlockEnabled: boolean
   minimizeShortcut: string
-  musicEnabled: boolean
-  musicVolume: number
+  country: CountryCode
+  schoolGrade: number
+  profileUpdatedAt: number
+  onboardingComplete: boolean
 }
 
 export const DEFAULT_PREFERENCES: AppPreferences = {
@@ -14,11 +28,14 @@ export const DEFAULT_PREFERENCES: AppPreferences = {
   animationsEnabled: true,
   adBlockEnabled: true,
   minimizeShortcut: 'CommandOrControl+Shift+M',
-  musicEnabled: true,
-  musicVolume: 0.12,
+  country: 'BY',
+  schoolGrade: 7,
+  profileUpdatedAt: 0,
+  onboardingComplete: false,
 }
 
 const themes = new Set<AppTheme>(['violet', 'ocean', 'emerald', 'sunset'])
+const countries = new Set<CountryCode>(COUNTRY_OPTIONS.map((country) => country.id))
 
 export function normalizePreferences(value: unknown): AppPreferences {
   if (!value || typeof value !== 'object') return DEFAULT_PREFERENCES
@@ -28,9 +45,15 @@ export function normalizePreferences(value: unknown): AppPreferences {
     animationsEnabled: typeof stored.animationsEnabled === 'boolean' ? stored.animationsEnabled : DEFAULT_PREFERENCES.animationsEnabled,
     adBlockEnabled: typeof stored.adBlockEnabled === 'boolean' ? stored.adBlockEnabled : DEFAULT_PREFERENCES.adBlockEnabled,
     minimizeShortcut: typeof stored.minimizeShortcut === 'string' ? stored.minimizeShortcut : DEFAULT_PREFERENCES.minimizeShortcut,
-    musicEnabled: typeof stored.musicEnabled === 'boolean' ? stored.musicEnabled : DEFAULT_PREFERENCES.musicEnabled,
-    musicVolume: typeof stored.musicVolume === 'number' && Number.isFinite(stored.musicVolume) ? Math.min(1, Math.max(0, stored.musicVolume)) : DEFAULT_PREFERENCES.musicVolume,
+    country: stored.country && countries.has(stored.country) ? stored.country : DEFAULT_PREFERENCES.country,
+    schoolGrade: typeof stored.schoolGrade === 'number' && Number.isInteger(stored.schoolGrade) && stored.schoolGrade >= 1 && stored.schoolGrade <= 11 ? stored.schoolGrade : DEFAULT_PREFERENCES.schoolGrade,
+    profileUpdatedAt: typeof stored.profileUpdatedAt === 'number' && Number.isFinite(stored.profileUpdatedAt) && stored.profileUpdatedAt >= 0 ? stored.profileUpdatedAt : DEFAULT_PREFERENCES.profileUpdatedAt,
+    onboardingComplete: typeof stored.onboardingComplete === 'boolean' ? stored.onboardingComplete : DEFAULT_PREFERENCES.onboardingComplete,
   }
+}
+
+export function shouldApplyRemoteLearningProfile(local: AppPreferences, remoteUpdatedAt: number, hasRemoteProfile: boolean) {
+  return hasRemoteProfile && (!local.onboardingComplete || remoteUpdatedAt >= local.profileUpdatedAt)
 }
 
 const keyNames: Record<string, string> = {

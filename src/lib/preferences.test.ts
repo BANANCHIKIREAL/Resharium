@@ -1,11 +1,22 @@
 import { describe, expect, it } from 'vitest'
-import { DEFAULT_PREFERENCES, displayAccelerator, isModifierOnlyAccelerator, keyboardEventToAccelerator, modifierKeyToAccelerator, normalizePreferences } from './preferences'
+import { DEFAULT_PREFERENCES, displayAccelerator, isModifierOnlyAccelerator, keyboardEventToAccelerator, modifierKeyToAccelerator, normalizePreferences, shouldApplyRemoteLearningProfile } from './preferences'
 
 describe('application preferences', () => {
   it('normalizes incomplete stored settings', () => {
     expect(normalizePreferences({ theme: 'ocean', adBlockEnabled: false })).toEqual({
       ...DEFAULT_PREFERENCES, theme: 'ocean', adBlockEnabled: false,
     })
+  })
+
+  it('keeps a valid learning profile and rejects invalid values', () => {
+    expect(normalizePreferences({ country: 'KZ', schoolGrade: 9, profileUpdatedAt: 123, onboardingComplete: true })).toMatchObject({ country: 'KZ', schoolGrade: 9, profileUpdatedAt: 123, onboardingComplete: true })
+    expect(normalizePreferences({ country: 'XX', schoolGrade: 15 })).toMatchObject({ country: 'BY', schoolGrade: 7 })
+  })
+
+  it('does not overwrite a newer local country with stale account metadata', () => {
+    const local = { ...DEFAULT_PREFERENCES, country: 'RU' as const, profileUpdatedAt: 200, onboardingComplete: true }
+    expect(shouldApplyRemoteLearningProfile(local, 100, true)).toBe(false)
+    expect(shouldApplyRemoteLearningProfile(local, 300, true)).toBe(true)
   })
 
   it('converts a keyboard combination to an Electron accelerator', () => {
